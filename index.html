@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor de Fotos Georreferenciadas - Campo</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- JSZip para generar archivos ZIP de proyectos -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        /* Panel lateral flotante con controles y listado de fotos */
+        .sidebar {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            width: 320px;
+            max-height: calc(100vh - 40px);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            font-size: 14px;
+        }
+        .filter-row {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .sidebar select {
+            padding: 6px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn-download-project {
+            background: #0056b3;
+            color: white;
+            border: none;
+            padding: 8px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            transition: background 0.2s;
+            width: 100%;
+        }
+        .btn-download-project:hover {
+            background: #003d82;
+        }
+        /* Listado de fotos individuales */
+        .photo-list {
+            overflow-y: auto;
+            max-height: calc(100vh - 220px);
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 4px;
+            background: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .photo-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .photo-item:hover {
+            background: #eff6ff;
+            border-color: #3b82f6;
+            transform: translateX(-2px);
+            box-shadow: 0 2px 5px rgba(59, 130, 246, 0.2);
+        }
+        .photo-item img {
+            width: 55px;
+            height: 55px;
+            object-fit: cover;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+        .photo-info {
+            flex: 1;
+            overflow: hidden;
+        }
+        .photo-title {
+            font-weight: bold;
+            color: #0056b3;
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .photo-meta {
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+        }
+        /* Tooltip grande al pasar el ratón */
+        .hover-tooltip {
+            background: white;
+            border: 1px solid #bbb;
+            border-radius: 8px;
+            padding: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        .hover-tooltip img {
+            width: 300px;
+            height: auto;
+            border-radius: 6px;
+            display: block;
+            margin-top: 6px;
+        }
+        .popup-img {
+            max-width: 600px;
+            height: auto;
+            border-radius: 6px;
+            margin-top: 6px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+        .popup-img:hover {
+            transform: scale(1.02);
+        }
+        .leaflet-popup-content-wrapper {
+            max-width: 640px !important;
+            padding: 4px;
+        }
+        .leaflet-popup-content {
+            width: auto !important;
+            margin: 12px 16px;
+            text-align: center;
+        }
+        .btn-download-single {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 5px 12px;
+            background: #28a745;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .btn-download-single:hover {
+            background: #218838;
+        }
+
+        /* Estilos para el Modal Lightbox con fondo oscuro */
+        #lightboxModal {
+            display: none;
+            position: fixed;
+            z-index: 99999;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.92);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #lightboxModal img {
+            max-width: 90vw;
+            max-height: 82vh;
+            border-radius: 8px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.8);
+            object-fit: contain;
+        }
+        #lightboxModal .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        #lightboxModal .lightbox-close:hover {
+            color: #ef4444;
+        }
+        #lightboxModal .lightbox-caption {
+            color: white;
+            margin-top: 15px;
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            background: rgba(255,255,255,0.1);
+            padding: 6px 15px;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Panel Lateral de Control y Listado -->
+    <div class="sidebar">
+        <div class="filter-row">
+            <label for="projectFilter"><b>📂 Filtrar por Proyecto:</b></label>
+            <select id="projectFilter">
+                <option value="ALL">Todos los proyectos</option>
+            </select>
+        </div>
+        
+        <div class="filter-row">
+            <button id="btnZip" class="btn-download-project">📦 Descargar Proyecto en ZIP</button>
+        </div>
+
+        <div>
+            <label style="font-size: 13px; color: #444;"><b>🖼️ Listado de Fotografías:</b></label>
+        </div>
+
+        <div id="photoList" class="photo-list">
+            <!-- Se rellenará dinámicamente -->
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <!-- Pantalla Modal Lightbox para ver la foto a resolución completa con fondo oscuro -->
+    <div id="lightboxModal">
+        <span class="lightbox-close" onclick="cerrarLightbox()">&times;</span>
+        <img id="lightboxImg" src="" alt="Imagen a resolución completa">
+        <div id="lightboxCaption" class="lightbox-caption"></div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Definir los Mapas Base (Calles y Satélite)
+        const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 22,
+            maxNativeZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
+        });
+
+        const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 22,
+            maxNativeZoom: 19,
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-eGP, and the GIS User Community'
+        });
+
+        // Inicializar el mapa
+        const map = L.map('map', {
+            maxZoom: 22,
+            layers: [osmLayer]
+        }).setView([40.4168, -3.7038], 6);
+
+        // Control para alternar entre mapas base
+        const baseMaps = {
+            "🗺️ Calles (OpenStreetMap)": osmLayer,
+            "🛰️ Satélite (Esri World Imagery)": satelliteLayer
+        };
+        L.control.layers(baseMaps, null, { position: 'topleft' }).addTo(map);
+
+        let geoJsonLayer = null;
+        let globalData = null;
+        const layerMap = {};
+
+        // Cargar datos.geojson con timestamp anti-caché
+        const urlGeoJson = 'datos.geojson?t=' + new Date().getTime();
+
+        fetch(urlGeoJson)
+            .then(response => {
+                if (!response.ok) throw new Error('No se pudo cargar datos.geojson');
+                return response.json();
+            })
+            .then(data => {
+                globalData = data;
+                poblarSelectProyectos(data);
+                filtrarYRenderizar('ALL');
+            })
+            .catch(error => {
+                console.error('Error al cargar los datos:', error);
+            });
+
+        function poblarSelectProyectos(data) {
+            const select = document.getElementById('projectFilter');
+            const proyectosSet = new Set();
+
+            data.features.forEach(feature => {
+                if (feature.properties && feature.properties.proyecto) {
+                    proyectosSet.add(feature.properties.proyecto);
+                }
+            });
+
+            proyectosSet.forEach(proyecto => {
+                const option = document.createElement('option');
+                option.value = proyecto;
+                option.textContent = proyecto;
+                select.appendChild(option);
+            });
+
+            select.addEventListener('change', function() {
+                filtrarYRenderizar(this.value);
+            });
+
+            document.getElementById('btnZip').addEventListener('click', function() {
+                const proyectoActual = select.value;
+                descargarProyectoZip(proyectoActual, data);
+            });
+        }
+
+        function filtrarYRenderizar(proyectoSeleccionado) {
+            if (!globalData) return;
+
+            const datosFiltrados = {
+                type: "FeatureCollection",
+                features: globalData.features.filter(feature => {
+                    if (proyectoSeleccionado === 'ALL') return true;
+                    return feature.properties.proyecto === proyectoSeleccionado;
+                })
+            };
+
+            renderizarMapa(datosFiltrados);
+            actualizarListaFotos(datosFiltrados.features);
+        }
+
+        function actualizarListaFotos(features) {
+            const metaOrigen = props.origen && props.origen !== "General" ? ` 👤 ${props.origen}` : "";
+            const photoListContainer = document.getElementById('photoList');
+            photoListContainer.innerHTML = '';
+
+            if (features.length === 0) {
+                photoListContainer.innerHTML = '<div style="padding: 10px; text-align: center; color: #888; font-size: 12px;">No hay fotos disponibles.</div>';
+                return;
+            }
+
+            features.forEach(feature => {
+                const props = feature.properties;
+                const coords = feature.geometry.coordinates;
+
+                const item = document.createElement('div');
+                item.className = 'photo-item';
+                item.innerHTML = `
+                    <img src="${props.imagen_url}" alt="miniatura">
+                    <div class="photo-info">
+                        <div class="photo-title" title="${props.nombre_archivo}">${props.nombre_archivo}</div>
+                        <div class="photo-meta">📁 ${props.proyecto}</div>
+                        <div class="photo-meta">📅 ${props.fecha !== "Desconocida" ? props.fecha : 'S/F'}</div>
+                    </div>
+                `;
+
+                item.addEventListener('click', function() {
+                    const lat = coords[1];
+                    const lon = coords[0];
+                    map.setView([lat, lon], 19);
+                    if (layerMap[props.imagen_url]) {
+                        layerMap[props.imagen_url].openPopup();
+                    }
+                });
+
+                item.addEventListener('mouseenter', function() {
+                    const layer = layerMap[props.imagen_url];
+                    if (layer) {
+                        layer.openTooltip();
+                        if (layer.setZIndexOffset) layer.setZIndexOffset(1000);
+                    }
+                });
+
+                item.addEventListener('mouseleave', function() {
+                    const layer = layerMap[props.imagen_url];
+                    if (layer) {
+                        layer.closeTooltip();
+                        if (layer.setZIndexOffset) layer.setZIndexOffset(0);
+                    }
+                });
+
+                photoListContainer.appendChild(item);
+            });
+        }
+
+        // Icono dinámico según Azimuth
+        function crearIconoPin(azimuth) {
+            if (azimuth !== null && azimuth !== undefined && !isNaN(azimuth)) {
+                return L.divIcon({
+                    className: 'custom-azimuth-icon',
+                    html: `<div style="transform: rotate(${azimuth}deg); width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.4);">
+                             <svg width="30" height="30" viewBox="0 0 24 24" fill="#0056b3" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="12 2 19 21 12 17 5 21 12 2"></polygon>
+                             </svg>
+                           </div>`,
+                    iconSize: [34, 34],
+                    iconAnchor: [17, 17],
+                    popupAnchor: [0, -17]
+                });
+            } else {
+                return L.divIcon({
+                    className: 'custom-default-icon',
+                    html: `<div style="background-color: #ef4444; width: 22px; height: 22px; border: 2px solid white; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`,
+                    iconSize: [22, 22],
+                    iconAnchor: [11, 11],
+                    popupAnchor: [0, -11]
+                });
+            }
+        }
+
+        // Construir contenido del Popup (Imagen abre Lightbox, Coordenadas copian al portapapeles)
+        function crearContenidoPopup(props, lon, lat) {
+	    const metaOrigen = props.origen && props.origen !== "General" ? ` 👤 ${props.origen}` : "";
+            const container = document.createElement('div');
+            container.style.textAlign = 'center';
+	
+            const title = document.createElement('b');
+            title.style.fontSize = '15px';
+            title.style.color = '#0056b3';
+            title.textContent = `🏷️ ${props.nombre_archivo}`;
+            container.appendChild(title);
+            container.appendChild(document.createElement('br'));
+
+            const badge = document.createElement('span');
+            badge.style.background = '#e2e8f0';
+            badge.style.padding = '2px 6px';
+            badge.style.borderRadius = '4px';
+            badge.style.fontSize = '11px';
+            badge.style.fontWeight = 'bold';
+            badge.style.color = '#333';
+            badge.textContent = `📁 ${props.proyecto} ${metaOrigen}`;
+            container.appendChild(badge);
+            container.appendChild(document.createElement('br'));
+
+            if (props.fecha && props.fecha !== "Desconocida") {
+                const fechaEl = document.createElement('span');
+                fechaEl.style.color = '#666';
+                fechaEl.style.fontSize = '12px';
+                fechaEl.textContent = `📅 ${props.fecha}`;
+                container.appendChild(fechaEl);
+                container.appendChild(document.createElement('br'));
+            }
+
+            if (props.azimuth !== null && props.azimuth !== undefined) {
+                const azEl = document.createElement('span');
+                azEl.style.color = '#0056b3';
+                azEl.style.fontSize = '11px';
+                azEl.style.fontWeight = 'bold';
+                azEl.textContent = `🧭 Orientación (Azimut): ${Math.round(props.azimuth)}°`;
+                container.appendChild(azEl);
+                container.appendChild(document.createElement('br'));
+            }
+
+            if (props.imagen_url) {
+                const img = document.createElement('img');
+                img.src = props.imagen_url;
+                img.className = 'popup-img';
+                img.title = 'Haz clic para ver a pantalla completa';
+                img.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    abrirLightbox(props.imagen_url, props.nombre_archivo);
+                });
+                container.appendChild(img);
+                container.appendChild(document.createElement('br'));
+
+                const btnDownload = document.createElement('a');
+                btnDownload.href = props.imagen_url;
+                btnDownload.download = props.nombre_archivo;
+                btnDownload.className = 'btn-download-single';
+                btnDownload.textContent = '📥 Descargar imagen';
+                container.appendChild(btnDownload);
+                container.appendChild(document.createElement('br'));
+            }
+
+            // Coordenadas: Al hacer clic se copian automáticamente al portapapeles
+            if (lon !== undefined && lat !== undefined) {
+                const latStr = lat.toFixed(5);
+                const lonStr = lon.toFixed(5);
+
+                const coordsEl = document.createElement('small');
+                coordsEl.style.color = '#888';
+                coordsEl.style.cursor = 'pointer';
+                coordsEl.style.textDecoration = 'underline';
+                coordsEl.title = 'Haz clic para copiar coordenadas';
+                coordsEl.textContent = `Lat: ${latStr}, Lon: ${lonStr}`;
+                
+                coordsEl.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const textoACopiar = `${latStr}, ${lonStr}`;
+                    navigator.clipboard.writeText(textoACopiar).then(() => {
+                        const originalText = coordsEl.textContent;
+                        coordsEl.textContent = '✅ ¡Coordenadas copiadas!';
+                        coordsEl.style.color = '#28a745';
+                        coordsEl.style.fontWeight = 'bold';
+                        setTimeout(() => {
+                            coordsEl.textContent = originalText;
+                            coordsEl.style.color = '#888';
+                            coordsEl.style.fontWeight = 'normal';
+                        }, 2000);
+                    }).catch(err => {
+                        console.error('Error al copiar al portapapeles:', err);
+                        alert('No se pudieron copiar las coordenadas.');
+                    });
+                });
+                container.appendChild(coordsEl);
+            }
+
+            return container;
+        }
+
+        function renderizarMapa(data) {
+            if (geoJsonLayer) {
+                map.removeLayer(geoJsonLayer);
+            }
+            for (const key in layerMap) {
+                delete layerMap[key];
+            }
+
+            geoJsonLayer = L.geoJSON(data, {
+                pointToLayer: function (feature, latlng) {
+                    const azimuth = feature.properties.azimuth;
+                    return L.marker(latlng, { icon: crearIconoPin(azimuth) });
+                },
+                onEachFeature: function (feature, layer) {
+                    if (feature.properties && feature.geometry) {
+                        const props = feature.properties;
+                        const coords = feature.geometry.coordinates;
+                        layerMap[props.imagen_url] = layer;
+
+                        const tooltipContent = `
+                            <div class="hover-tooltip">
+                                <b style="font-size:13px; color:#0056b3;">${props.nombre_archivo}</b><br>
+                                <span style="font-size:11px; color:#666;">📁 ${props.proyecto}</span>
+                                <img src="${props.imagen_url}" alt="miniatura grande">
+                            </div>
+                        `;
+                        layer.bindTooltip(tooltipContent, { direction: 'top', offset: [0, -10] });
+
+                        const popupElement = crearContenidoPopup(props, coords[0], coords[1]);
+                        layer.bindPopup(popupElement);
+                    }
+                }
+            }).addTo(map);
+
+            if (data.features && data.features.length > 0) {
+                map.fitBounds(geoJsonLayer.getBounds(), { padding: [50, 50] });
+            }
+        }
+
+        // Control del Visor Lightbox
+        window.abrirLightbox = function(urlImagen, nombreArchivo) {
+            const modal = document.getElementById('lightboxModal');
+            const imgModal = document.getElementById('lightboxImg');
+            const caption = document.getElementById('lightboxCaption');
+
+            imgModal.src = urlImagen;
+            caption.textContent = `🏷️ ${nombreArchivo}`;
+            modal.style.display = 'flex';
+        };
+
+        window.cerrarLightbox = function() {
+            document.getElementById('lightboxModal').style.display = 'none';
+        };
+
+        // Cerrar haciendo clic fuera de la foto en el fondo oscuro
+        document.getElementById('lightboxModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                cerrarLightbox();
+            }
+        });
+
+        // NUEVO: Cerrar el Lightbox pulsando la tecla Escape (ESC)
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                cerrarLightbox();
+            }
+        });
+
+        // Función para descargar en ZIP
+        async function descargarProyectoZip(proyectoFiltro, data) {
+            const zip = new JSZip();
+            const featuresAProcesar = data.features.filter(f => {
+                if (proyectoFiltro === 'ALL') return true;
+                return f.properties.proyecto === proyectoFiltro;
+            });
+
+            if (featuresAProcesar.length === 0) {
+                alert("No hay imágenes en este proyecto para descargar.");
+                return;
+            }
+
+            alert(`Preparando archivo ZIP con ${featuresAProcesar.length} imágenes... Por favor, espera.`);
+
+            try {
+                for (const feature of featuresAProcesar) {
+                    const props = feature.properties;
+                    const response = await fetch(props.imagen_url);
+                    const blob = await response.blob();
+                    
+                    const folderName = props.proyecto || "General";
+                    zip.folder(folderName).file(props.nombre_archivo, blob);
+                }
+
+                const content = await zip.generateAsync({ type: "blob" });
+                const url = window.URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = proyectoFiltro === 'ALL' ? "todas_las_fotos_campo.zip" : `proyecto_${proyectoFiltro}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (error) {
+                console.error("Error al generar el ZIP:", error);
+                alert("Hubo un error al descargar las imágenes en ZIP.");
+            }
+        }
+    </script>
+</body>
+</html>

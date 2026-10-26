@@ -1,0 +1,5 @@
+# Ignorar herramientas locales y carpetas de trabajo bruto
+WinPython/
+git/
+__pycache__/
+*.pyc
