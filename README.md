@@ -18,7 +18,9 @@ En la barra superior de la interfaz, junto a la caja de búsqueda, aparecen dos 
 
 * **Exportación GeoJSON:** Genera un archivo estándar con las geometrías de los puntos y sus propiedades (nombre, fecha y azimut) listo para sistemas SIG.
 * **Exportación DXF (AutoCAD):** Utiliza `proj4` para transformar las coordenadas geográficas a metros $UTM$ reales en el navegador. Construye dinámicamente un archivo vectorial en formato ASCII DXF estructurado en capas profesionales (`FOTOS_PUNTOS`, `FOTOS_AZIMUT`, `FOTOS_TEXTO`), representando cada foto mediante un punto base, una flecha orientada según el azimut y etiquetas de texto con el nombre, fecha y acimut para facilitar el trabajo de delineación en CAD.
-
+<p align="center">
+<img width="899" height="157" alt="image" text-align:center src="https://github.com/user-attachments/assets/c5a03183-e955-46f6-b09d-f3dce33ff4a1" />
+</p>
 Esto permite integrar las imágenes en el flujo de trabajo del equipo de delineación si fuera necesario, y más adelante se estudiará la mejora de la herramienta de exportación en DXF para adaptarse a las necesidades del equipo.
 
 <h2>Estructura del proyecto y tecnologías utilizadas</h2>
@@ -85,7 +87,9 @@ In the top bar of the interface, next to the search box, two export options appe
 
 * **GeoJSON Export:** Generates a standard file with point geometries and their properties (name, date, and azimuth), ready for GIS systems.
 * **DXF Export (AutoCAD):** Uses `proj4` to transform geographic coordinates into real $UTM$ meters in the browser. It dynamically builds a vector file in ASCII DXF format structured in professional layers (`FOTOS_PUNTOS`, `FOTOS_AZIMUT`, `FOTOS_TEXTO`), representing each photo via a base point, an arrow oriented according to the azimuth, and text labels with the name, date, and azimuth to facilitate drafting work in CAD.
-
+<p align="center">
+<img width="899" height="157" alt="image" text-align:center src="https://github.com/user-attachments/assets/c5a03183-e955-46f6-b09d-f3dce33ff4a1" />
+</p>
 This allows the images to be integrated into the detailing team's workflow if necessary, and improvements to the DXF export tool will be studied later to adapt to the team's needs.
 
 ## Project Structure and Technologies Used
