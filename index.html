@@ -3,547 +3,271 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visor de Inspecciones GeoEXIF Avanzado</title>
+    <title>Visor Geospacial Autónomo - Inspecciones</title>
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- FontAwesome para Iconos -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-    
-    <!-- Tailwind CSS para Estilos -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            50: '#f0f7ff',
-                            100: '#e0effe',
-                            500: '#0284c7',
-                            600: '#0369a1',
-                            700: '#075985',
-                            900: '#0c4a6e',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-
-    <!-- Exifr JS para extraer metadatos EXIF en cliente -->
+    <!-- Librería Exifr para EXIF/GPS -->
     <script src="https://cdn.jsdelivr.net/npm/exifr/dist/full.umd.js"></script>
 
     <style>
-        /* Estilos personalizados del mapa y animaciones */
-        #map {
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-        }
-
-        /* Marcadores interactivos personalizados */
-        .custom-marker {
-            transition: all 0.25s ease;
-        }
-        .custom-marker-inner {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background-color: #0284c7;
-            border: 3px solid #ffffff;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 14px;
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.2s;
-        }
-        .custom-marker.active .custom-marker-inner,
-        .custom-marker:hover .custom-marker-inner {
-            transform: scale(1.35);
-            background-color: #f59e0b;
-            border-color: #ffffff;
-            z-index: 1000 !important;
-        }
-
-        /* Scrollbar personalizado */
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 3px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
-
-        /* Animación suave para la lista */
-        .item-card {
-            transition: all 0.2s ease;
-        }
-        .item-card.highlighted {
-            border-color: #f59e0b;
-            background-color: #fffbeb;
-            transform: translateX(4px);
+        body { font-family: system-ui, -apple-system, sans-serif; }
+        /* Lightbox adaptado para no salir de pantalla */
+        #lightbox-modal img {
+            max-width: 90vw;
+            max-height: 85vh;
+            object-fit: contain;
         }
     </style>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans h-screen flex flex-col md:flex-row overflow-hidden">
+<body class="bg-gray-100 h-screen flex overflow-hidden">
 
-    <!-- PANEL LATERAL (SIDEBAR) -->
-    <aside class="w-full md:w-96 bg-white flex flex-col h-1/2 md:h-full border-r border-slate-200 shadow-xl z-20">
-        
-        <!-- Header Principal -->
-        <div class="p-4 bg-brand-900 text-white flex items-center justify-between shadow-md">
-            <div class="flex items-center gap-3">
-                <i class="fa-solid fa-map-location-dot text-brand-500 text-2xl"></i>
-                <div>
-                    <h1 class="font-bold text-base leading-tight">Visor GeoEXIF</h1>
-                    <p class="text-xs text-slate-300">Inspecciones de Campo</p>
-                </div>
-            </div>
-            <span id="counter-badge" class="bg-brand-700 text-brand-100 text-xs font-semibold px-2.5 py-1 rounded-full">
-                0 fotos
-            </span>
+    <!-- PANEL LATERAL -->
+    <div class="w-96 bg-white shadow-xl flex flex-col z-20">
+        <div class="p-4 bg-blue-600 text-white">
+            <h1 class="text-lg font-bold">Visor de Inspección GeoEXIF</h1>
+            <p class="text-xs text-blue-100">Arrastra tus fotos de SharePoint o locales</p>
         </div>
 
-        <!-- Zona Drag & Drop -->
-        <div class="p-3 bg-slate-50 border-b border-slate-200">
-            <div id="drop-zone" class="border-2 border-dashed border-brand-500 hover:border-brand-600 bg-brand-50/50 hover:bg-brand-50 transition-all rounded-xl p-4 text-center cursor-pointer group">
-                <input type="file" id="file-input" multiple accept="image/jpeg, image/jpg" class="hidden">
-                <i class="fa-solid fa-cloud-arrow-up text-3xl text-brand-500 group-hover:scale-110 transition-transform mb-1"></i>
-                <p class="text-xs font-semibold text-slate-700">Arrastra fotos JPG/JPEG aquí</p>
-                <p class="text-[10px] text-slate-500 mt-0.5">o haz clic para explorar en tu equipo</p>
-            </div>
+        <!-- Zona de Drag & Drop -->
+        <div id="drop-zone" class="m-4 border-2 border-dashed border-blue-400 rounded-lg p-6 text-center bg-blue-50 hover:bg-blue-100 cursor-pointer transition">
+            📁 <b class="text-sm text-blue-700">Arrastra tus fotos aquí</b><br>
+            <span class="text-xs text-gray-500">o haz clic para buscarlas</span>
+            <input type="file" id="file-input" multiple accept="image/jpeg, image/jpg" class="hidden">
         </div>
 
-        <!-- Filtros y Búsqueda -->
-        <div class="p-3 bg-white border-b border-slate-200 flex items-center gap-2">
-            <div class="relative flex-1">
-                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                <input type="text" id="search-input" placeholder="Buscar por nombre o fecha..." 
-                       class="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 transition">
-            </div>
-            <button id="btn-export" title="Exportar GeoJSON" disabled
-                    class="px-3 py-1.5 bg-slate-100 hover:bg-brand-500 hover:text-white text-slate-600 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1">
-                <i class="fa-solid fa-download"></i>
-                <span class="hidden sm:inline">Exportar</span>
-            </button>
-            <button id="btn-reset" title="Limpiar todo" disabled
-                    class="px-2.5 py-1.5 bg-slate-100 hover:bg-red-500 hover:text-white text-slate-600 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:pointer-events-none">
-                <i class="fa-solid fa-trash-can"></i>
+        <!-- Buscador / Filtro -->
+        <div class="px-4 mb-2">
+            <input type="text" id="search-input" placeholder="🔍 Filtrar por nombre o fecha..." class="w-full px-3 py-2 text-xs border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <!-- Listado de Fotos -->
+        <div class="flex-1 overflow-y-auto px-4 pb-4 space-y-2" id="file-list">
+            <div class="text-center text-gray-400 text-xs py-8">No hay imágenes cargadas.</div>
+        </div>
+
+        <!-- Exportar GeoJSON -->
+        <div class="p-4 border-t bg-gray-50">
+            <button id="btn-export" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-4 rounded transition hidden">
+                📥 Descargar GeoJSON
             </button>
         </div>
+    </div>
 
-        <!-- Lista de Fotografías Cargadas -->
-        <div id="items-container" class="flex-1 overflow-y-auto p-3 space-y-2">
-            <!-- Estado inicial vacío -->
-            <div id="empty-state" class="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
-                <i class="fa-regular fa-images text-4xl mb-3 text-slate-300"></i>
-                <p class="text-xs font-medium">No hay fotografías cargadas</p>
-                <p class="text-[11px] mt-1 text-slate-400">Arrastra archivos para procesar automáticamente sus coordenadas GPS.</p>
-            </div>
-        </div>
+    <!-- MAPA -->
+    <div id="map" class="flex-1 h-full z-10"></div>
 
-        <!-- Footer / Logs -->
-        <div class="px-3 py-2 bg-slate-100 border-t border-slate-200 text-[10px] text-slate-500 flex justify-between items-center">
-            <span id="status-text">Listo para cargar</span>
-            <span id="gps-stats">0 con GPS</span>
-        </div>
-    </aside>
-
-    <!-- MAPA PRINCIPAL -->
-    <main class="flex-1 relative h-1/2 md:h-full">
-        <div id="map"></div>
-
-        <!-- Botón Flotante para recentrar mapa -->
-        <button id="btn-center-map" class="absolute bottom-5 right-5 z-[1000] bg-white text-slate-700 hover:text-brand-600 p-3 rounded-full shadow-lg border border-slate-200 transition hover:scale-105 active:scale-95 flex items-center justify-center">
-            <i class="fa-solid fa-crosshairs text-lg"></i>
-        </button>
-    </main>
-
-    <!-- LIGHTBOX / VISOR A PANTALLA COMPLETA -->
-    <div id="lightbox" class="fixed inset-0 bg-black/90 backdrop-blur-sm z-[2000] hidden flex-col justify-between p-4 transition-opacity duration-300 opacity-0">
-        <!-- Header Lightbox -->
-        <div class="flex justify-between items-center text-white z-10">
-            <div>
-                <h3 id="lightbox-title" class="font-bold text-sm sm:text-base">Nombre de la Foto</h3>
-                <p id="lightbox-sub" class="text-xs text-slate-300">Fecha y coordenadas</p>
-            </div>
-            <div class="flex items-center gap-2">
-                <button id="lightbox-prev" class="p-2 hover:bg-white/20 rounded-full text-white transition"><i class="fa-solid fa-chevron-left text-xl"></i></button>
-                <button id="lightbox-next" class="p-2 hover:bg-white/20 rounded-full text-white transition"><i class="fa-solid fa-chevron-right text-xl"></i></button>
-                <button id="lightbox-close" class="p-2 hover:bg-red-500/80 rounded-full text-white transition ml-4"><i class="fa-solid fa-xmark text-2xl"></i></button>
-            </div>
-        </div>
-
-        <!-- Imagen principal -->
-        <div class="flex-1 flex items-center justify-center overflow-hidden my-2">
-            <img id="lightbox-img" src="" alt="Previsualización" class="max-h-full max-w-full object-contain rounded-lg shadow-2xl">
-        </div>
-
-        <!-- Footer Lightbox -->
-        <div class="text-center text-xs text-slate-400 py-1">
-            <span id="lightbox-index">1 / 1</span>
-        </div>
+    <!-- LIGHTBOX MODAL -->
+    <div id="lightbox-modal" class="fixed inset-0 bg-black/80 z-50 hidden flex flex-col items-center justify-center p-4">
+        <button onclick="closeLightbox()" class="absolute top-4 right-6 text-white text-3xl font-bold hover:text-gray-300">&times;</button>
+        <img id="lightbox-img" class="rounded-lg shadow-2xl mb-3" src="" alt="Ampliación">
+        <p id="lightbox-caption" class="text-white text-sm font-semibold bg-black/50 px-4 py-1 rounded-full"></p>
     </div>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // --- ESTADO GLOBAL DE LA APLICACIÓN ---
-        let photosData = []; // Colección de fotos procesadas
-        let markersGroup = L.featureGroup(); // Grupo para fácil gestión de encuadre
-        let activePhotoId = null;
-        let currentLightboxIndex = 0;
+        const map = L.map('map').setView([40.4168, -3.7038], 6);
 
-        // --- INICIALIZACIÓN DEL MAPA ---
-        const map = L.map('map', {
-            zoomControl: false
-        }).setView([40.4168, -3.7038], 6); // España por defecto
-
-        // Añadir controles de zoom arriba a la derecha
-        L.control.zoom({ position: 'topright' }).addTo(map);
-
-        // Capa de mapa base limpia
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
-            attribution: '© OpenStreetMap'
+            attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        markersGroup.addTo(map);
+        const markersLayer = L.layerGroup().addTo(map);
+        let loadedPhotos = [];
 
-        // --- ELEMENTOS DEL DOM ---
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
-        const itemsContainer = document.getElementById('items-container');
-        const emptyState = document.getElementById('empty-state');
+        const fileList = document.getElementById('file-list');
         const searchInput = document.getElementById('search-input');
-        const counterBadge = document.getElementById('counter-badge');
-        const statusText = document.getElementById('status-text');
-        const gpsStats = document.getElementById('gps-stats');
         const btnExport = document.getElementById('btn-export');
-        const btnReset = document.getElementById('btn-reset');
-        const btnCenterMap = document.getElementById('btn-center-map');
 
-        // Lightbox DOM
-        const lightbox = document.getElementById('lightbox');
-        const lightboxImg = document.getElementById('lightbox-img');
-        const lightboxTitle = document.getElementById('lightbox-title');
-        const lightboxSub = document.getElementById('lightbox-sub');
-        const lightboxIndex = document.getElementById('lightbox-index');
-        const lightboxClose = document.getElementById('lightbox-close');
-        const lightboxPrev = document.getElementById('lightbox-prev');
-        const lightboxNext = document.getElementById('lightbox-next');
-
-        // --- GESTIÓN DE EVENTOS DE DRAG & DROP ---
         dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('bg-brand-100'); });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('bg-brand-100'));
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('bg-blue-100'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('bg-blue-100'));
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
-            dropZone.classList.remove('bg-brand-100');
-            if (e.dataTransfer.files.length) processFiles(e.dataTransfer.files);
+            dropZone.classList.remove('bg-blue-100');
+            handleFiles(e.dataTransfer.files);
         });
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length) processFiles(e.target.files);
-        });
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
 
-        // --- FUNCIÓN PRINCIPAL DE PROCESAMIENTO DE ARCHIVOS ---
-        async function processFiles(files) {
-            statusText.innerText = 'Procesando imágenes...';
-            let addedCount = 0;
+        searchInput.addEventListener('input', renderPhotoList);
+
+        function extraerFechaDeNombre(filename) {
+            const match = filename.match(/(\d{8})_(\d{6})/);
+            if (match) {
+                const f = match[1], h = match[2];
+                return `${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6,8)} ${h.slice(0,2)}:${h.slice(2,4)}:${h.slice(4,6)}`;
+            }
+            return "Fecha desconocida";
+        }
+
+        async function handleFiles(files) {
+            let bounds = [];
 
             for (let file of files) {
                 if (!file.type.match('image/jpeg') && !file.name.match(/\.(jpg|jpeg)$/i)) continue;
 
-                const photoId = 'photo_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-                const objectURL = URL.createObjectURL(file);
-
-                let lat = null, lon = null, fechaStr = "Desconocida";
-
                 try {
-                    // 1. Extraer GPS con EXIFR
+                    // Extraer GPS y Azimut (GPSImgDirection)
+                    const exifData = await exifr.parse(file, { gps: true, pick: ['GPSImgDirection', 'GPSDestBearing'] });
                     const gps = await exifr.gps(file);
+
                     if (gps && gps.latitude && gps.longitude) {
-                        lat = gps.latitude;
-                        lon = gps.longitude;
+                        const lat = gps.latitude;
+                        const lon = gps.longitude;
+                        const fecha = extraerFechaDeNombre(file.name);
+                        const azimut = exifData?.GPSImgDirection || exifData?.GPSDestBearing || null;
+                        const objectURL = URL.createObjectURL(file);
+
+                        const photoObj = {
+                            name: file.name,
+                            lat: lat,
+                            lon: lon,
+                            fecha: fecha,
+                            azimut: azimut ? Math.round(azimut) : null,
+                            url: objectURL,
+                            file: file
+                        };
+
+                        loadedPhotos.push(photoObj);
+                        bounds.push([lat, lon]);
+                        addMarkerToMap(photoObj);
                     }
-
-                    // 2. Extraer Fecha (desde EXIF o desde el nombre)
-                    const exifData = await exifr.parse(file, ['DateTimeOriginal']);
-                    if (exifData && exifData.DateTimeOriginal) {
-                        fechaStr = new Date(exifData.DateTimeOriginal).toLocaleString('es-ES');
-                    } else {
-                        fechaStr = parseDateFromFilename(file.name);
-                    }
-                } catch (err) {
-                    console.warn(`Error leyendo EXIF en ${file.name}:`, err);
-                    fechaStr = parseDateFromFilename(file.name);
+                } catch (error) {
+                    console.error(`Error leyendo ${file.name}:`, error);
                 }
-
-                // Guardar objeto en memoria
-                const photoObj = {
-                    id: photoId,
-                    name: file.name,
-                    url: objectURL,
-                    lat: lat,
-                    lon: lon,
-                    date: fechaStr,
-                    hasGps: lat !== null && lon !== null,
-                    marker: null
-                };
-
-                // Si tiene GPS, crear marcador Leaflet
-                if (photoObj.hasGps) {
-                    const marker = createCustomMarker(photoObj);
-                    photoObj.marker = marker;
-                    markersGroup.addLayer(marker);
-                }
-
-                photosData.push(photoObj);
-                addedCount++;
             }
 
-            statusText.innerText = `Cargadas ${addedCount} fotos`;
-            updateUI();
-
-            // Auto-ajustar mapa a los marcadores si existen
-            if (markersGroup.getLayers().length > 0) {
-                map.fitBounds(markersGroup.getBounds(), { padding: [40, 40] });
+            if (bounds.length > 0) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+                btnExport.classList.remove('hidden');
+                renderPhotoList();
             }
         }
 
-        // --- EXTRAER FECHA DESDE EL NOMBRE (Sintaxis YYYYMMDD_HHMMSS) ---
-        function parseDateFromFilename(filename) {
-            const match = filename.match(/(\d{4})(\d{2})(\d{2})[_\-](\d{2})(\d{2})(\d{2})/);
-            if (match) {
-                return `${match[3]}/${match[2]}/${match[1]} ${match[4]}:${match[5]}:${match[6]}`;
-            }
-            return "Sin fecha EXIF";
-        }
+        function addMarkerToMap(photo) {
+            const marker = L.marker([photo.lat, photo.lon]).addTo(markersLayer);
 
-        // --- CREAR MARCADOR PERSONALIZADO ---
-        function createCustomMarker(photo) {
-            const customIcon = L.divIcon({
-                className: 'custom-marker',
-                html: `<div class="custom-marker-inner"><i class="fa-solid fa-camera"></i></div>`,
-                iconSize: [32, 32],
-                iconAnchor: [16, 16]
+            // 1. Tooltip al pasar el ratón (Hover)
+            marker.bindTooltip(`<b>${photo.name}</b><br><small>${photo.fecha}</small>`, {
+                direction: 'top',
+                offset: [0, -10],
+                opacity: 0.9
             });
 
-            const marker = L.marker([photo.lat, photo.lon], { icon: customIcon });
-
-            // Popup del marcador
+            // 2. Popup detallado al hacer clic (Mantiene el zoom uniforme)
             const popupContent = `
-                <div class="text-center p-1">
-                    <img src="${photo.url}" class="w-full h-28 object-cover rounded shadow cursor-pointer mb-2 hover:opacity-90 transition" onclick="openLightboxById('${photo.id}')">
-                    <p class="font-bold text-xs truncate max-w-[180px]">${photo.name}</p>
-                    <p class="text-[10px] text-slate-500">${photo.date}</p>
+                <div class="p-1 max-w-xs">
+                    <b class="text-blue-900 text-sm block mb-1">${photo.name}</b>
+                    <div class="text-xs text-gray-600 mb-1">📅 ${photo.fecha}</div>
+                    <div class="text-xs text-gray-600 mb-1">📍 ${photo.lat.toFixed(6)}, ${photo.lon.toFixed(6)}</div>
+                    ${photo.azimut !== null ? `<div class="text-xs text-gray-600 mb-2">🧭 Azimut: ${photo.azimut}°</div>` : ''}
+                    <img src="${photo.url}" class="w-full h-36 object-cover rounded-md cursor-pointer mb-2 hover:opacity-90 transition" onclick="openLightbox('${photo.url}', '${photo.name}')" alt="Foto">
+                    <button onclick="copiarCoordenadas(${photo.lat}, ${photo.lon})" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1 px-2 rounded transition">
+                        📋 Copiar Coordenadas
+                    </button>
                 </div>
             `;
             marker.bindPopup(popupContent);
 
-            // Hover bidireccional (Mapa -> Lista)
-            marker.on('mouseover', () => highlightItem(photo.id, true));
-            marker.on('mouseout', () => highlightItem(photo.id, false));
-            marker.on('click', () => focusPhoto(photo.id, false));
+            // Sincronizar hover con la lista lateral
+            marker.on('mouseover', () => {
+                const el = document.getElementById(`card-${photo.name}`);
+                if (el) el.classList.add('bg-blue-50', 'border-blue-400');
+            });
+            marker.on('mouseout', () => {
+                const el = document.getElementById(`card-${photo.name}`);
+                if (el) el.classList.remove('bg-blue-50', 'border-blue-400');
+            });
 
-            return marker;
+            photo.marker = marker;
         }
 
-        // --- ACTUALIZAR LA INTERFAZ COMPLETA ---
-        function updateUI() {
+        function renderPhotoList() {
             const query = searchInput.value.toLowerCase();
-            const filteredPhotos = photosData.filter(p => p.name.toLowerCase().includes(query) || p.date.toLowerCase().includes(query));
+            fileList.innerHTML = '';
 
-            itemsContainer.innerHTML = '';
+            const filtered = loadedPhotos.filter(p => p.name.toLowerCase().includes(query) || p.fecha.toLowerCase().includes(query));
 
-            if (photosData.length === 0) {
-                emptyState.classList.remove('hidden');
-                btnExport.disabled = true;
-                btnReset.disabled = true;
-                counterBadge.innerText = '0 fotos';
-                gpsStats.innerText = '0 con GPS';
+            if (filtered.length === 0) {
+                fileList.innerHTML = `<div class="text-center text-gray-400 text-xs py-8">No se encontraron resultados.</div>`;
                 return;
             }
 
-            emptyState.classList.add('hidden');
-            btnExport.disabled = false;
-            btnReset.disabled = false;
-
-            const gpsCount = photosData.filter(p => p.hasGps).length;
-            counterBadge.innerText = `${photosData.length} fotos`;
-            gpsStats.innerText = `${gpsCount} con GPS`;
-
-            filteredPhotos.forEach(photo => {
-                const card = document.createElement('div');
-                card.id = `card-${photo.id}`;
-                card.className = `item-card p-2 bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow flex gap-3 items-center cursor-pointer relative overflow-hidden`;
-
-                card.innerHTML = `
-                    <img src="${photo.url}" class="w-14 h-14 object-cover rounded-md flex-shrink-0 bg-slate-200" onclick="openLightboxById('${photo.id}')">
+            filtered.forEach(photo => {
+                const div = document.createElement('div');
+                div.id = `card-${photo.name}`;
+                div.className = "flex items-center gap-3 p-2 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 transition";
+                div.innerHTML = `
+                    <img src="${photo.url}" class="w-12 h-12 object-cover rounded shadow-sm" onclick="event.stopPropagation(); openLightbox('${photo.url}', '${photo.name}')">
                     <div class="flex-1 min-w-0">
-                        <p class="font-semibold text-xs text-slate-800 truncate">${photo.name}</p>
-                        <p class="text-[10px] text-slate-500 mt-0.5"><i class="fa-regular fa-clock mr-1"></i>${photo.date}</p>
-                        ${photo.hasGps 
-                            ? `<p class="text-[10px] text-brand-600 font-medium mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>${photo.lat.toFixed(4)}, ${photo.lon.toFixed(4)}</p>` 
-                            : `<p class="text-[10px] text-red-400 font-medium mt-0.5"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Sin datos GPS</p>`}
+                        <p class="text-xs font-bold text-gray-800 truncate">${photo.name}</p>
+                        <p class="text-[10px] text-gray-500">${photo.fecha}</p>
+                        ${photo.azimut !== null ? `<p class="text-[10px] text-blue-600 font-semibold">🧭 ${photo.azimut}°</p>` : ''}
                     </div>
-                    ${photo.hasGps ? `
-                        <button class="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition" onclick="focusPhoto('${photo.id}', true)">
-                            <i class="fa-solid fa-crosshairs text-xs"></i>
-                        </button>
-                    ` : ''}
                 `;
 
-                // Hover bidireccional (Lista -> Mapa)
-                card.addEventListener('mouseenter', () => highlightItem(photo.id, true));
-                card.addEventListener('mouseleave', () => highlightItem(photo.id, false));
-                card.addEventListener('click', (e) => {
-                    if (!e.target.closest('button') && !e.target.closest('img')) {
-                        focusPhoto(photo.id, true);
-                    }
+                // Al hacer clic en la tarjeta del panel lateral, centra el mapa en el punto y abre su popup
+                div.addEventListener('click', () => {
+                    map.setView([photo.lat, photo.lon], 18);
+                    photo.marker.openPopup();
                 });
 
-                itemsContainer.appendChild(card);
+                fileList.appendChild(div);
             });
         }
 
-        // --- HIGHLIGHT HOVER BIDIRECCIONAL ---
-        function highlightItem(id, isHighlight) {
-            const photo = photosData.find(p => p.id === id);
-            if (!photo) return;
-
-            // 1. Resaltar Tarjeta en Sidebar
-            const card = document.getElementById(`card-${id}`);
-            if (card) {
-                if (isHighlight) card.classList.add('highlighted');
-                else card.classList.remove('highlighted');
-            }
-
-            // 2. Resaltar Marcador en Mapa
-            if (photo.marker && photo.marker.getElement()) {
-                const element = photo.marker.getElement();
-                if (isHighlight) element.classList.add('active');
-                else element.classList.remove('active');
-            }
+        function copiarCoordenadas(lat, lon) {
+            const texto = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+            navigator.clipboard.writeText(texto).then(() => {
+                alert(`¡Coordenadas copiadas al portapapeles!\n${texto}`);
+            });
         }
 
-        // --- ENFOCAR FOTO EN MAPA Y DESPLAZAR LISTA ---
-        function focusPhoto(id, openPopup = true) {
-            const photo = photosData.find(p => p.id === id);
-            if (!photo || !photo.hasGps) return;
-
-            map.flyTo([photo.lat, photo.lon], 16, { duration: 1.2 });
-
-            if (openPopup && photo.marker) {
-                photo.marker.openPopup();
-            }
-
-            // Scroll suave en lista
-            const card = document.getElementById(`card-${id}`);
-            if (card) {
-                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
-        }
-
-        // --- GESTIÓN DEL LIGHTBOX ---
-        function openLightboxById(id) {
-            const index = photosData.findIndex(p => p.id === id);
-            if (index !== -1) showLightbox(index);
-        }
-
-        function showLightbox(index) {
-            if (index < 0 || index >= photosData.length) return;
-            currentLightboxIndex = index;
-            const photo = photosData[index];
-
-            lightboxImg.src = photo.url;
-            lightboxTitle.innerText = photo.name;
-            lightboxSub.innerText = photo.hasGps 
-                ? `${photo.date} | GPS: ${photo.lat.toFixed(5)}, ${photo.lon.toFixed(5)}` 
-                : `${photo.date} | Sin coordenadas GPS`;
-            lightboxIndex.innerText = `${index + 1} / ${photosData.length}`;
-
-            lightbox.classList.remove('hidden');
-            setTimeout(() => lightbox.classList.add('opacity-100'), 10);
+        function openLightbox(url, name) {
+            document.getElementById('lightbox-img').src = url;
+            document.getElementById('lightbox-caption').innerText = name;
+            document.getElementById('lightbox-modal').classList.remove('hidden');
         }
 
         function closeLightbox() {
-            lightbox.classList.remove('opacity-100');
-            setTimeout(() => lightbox.classList.add('hidden'), 300);
+            document.getElementById('lightbox-modal').classList.add('hidden');
         }
 
-        lightboxClose.addEventListener('click', closeLightbox);
-        lightboxPrev.addEventListener('click', () => showLightbox(currentLightboxIndex - 1));
-        lightboxNext.addEventListener('click', () => showLightbox(currentLightboxIndex + 1));
-
-        // Teclas para navegación en Lightbox
-        document.addEventListener('keydown', (e) => {
-            if (lightbox.classList.contains('hidden')) return;
+        // Cerrar lightbox con tecla ESC
+        window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeLightbox();
-            if (e.key === 'ArrowLeft') showLightbox(currentLightboxIndex - 1);
-            if (e.key === 'ArrowRight') showLightbox(currentLightboxIndex + 1);
         });
 
-        // --- BUSCADOR EN TIEMPO REAL ---
-        searchInput.addEventListener('input', updateUI);
-
-        // --- EXPORTAR A GEOJSON ---
+        // Exportar a GeoJSON
         btnExport.addEventListener('click', () => {
-            const features = photosData.filter(p => p.hasGps).map(p => ({
+            const features = loadedPhotos.map(p => ({
                 type: "Feature",
                 geometry: {
                     type: "Point",
                     coordinates: [p.lon, p.lat]
                 },
                 properties: {
-                    nombre: p.name,
-                    fecha: p.date
+                    archivo: p.name,
+                    fecha: p.fecha,
+                    azimut: p.azimut,
+                    imagen_url: p.url
                 }
             }));
 
-            const geojson = {
-                type: "FeatureCollection",
-                features: features
-            };
-
+            const geojson = { type: "FeatureCollection", features: features };
             const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `inspeccion_geolocalizada_${Date.now()}.geojson`;
+            a.download = "datos_inspeccion.geojson";
             a.click();
-            URL.revokeObjectURL(url);
-        });
-
-        // --- RESETEAR / LIMPIAR TODO ---
-        btnReset.addEventListener('click', () => {
-            if (!confirm("¿Deseas borrar todas las fotos cargadas?")) return;
-            photosData.forEach(p => URL.revokeObjectURL(p.url));
-            photosData = [];
-            markersGroup.clearLayers();
-            updateUI();
-            statusText.innerText = 'Lista limpiada';
-            map.setView([40.4168, -3.7038], 6);
-        });
-
-        // --- RECENTRAR MAPA ---
-        btnCenterMap.addEventListener('click', () => {
-            if (markersGroup.getLayers().length > 0) {
-                map.fitBounds(markersGroup.getBounds(), { padding: [40, 40] });
-            } else {
-                map.setView([40.4168, -3.7038], 6);
-            }
         });
     </script>
 </body>
