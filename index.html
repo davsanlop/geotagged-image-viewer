@@ -3,67 +3,156 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visor Geospacial Autónomo - Inspecciones</title>
+    <title>Visor Geospacial de Inspección</title>
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Librería Exifr para EXIF/GPS -->
+    <!-- Librería Exifr para EXIF y GPS -->
     <script src="https://cdn.jsdelivr.net/npm/exifr/dist/full.umd.js"></script>
+    <!-- Plugin Leaflet RotatedMarker para el icono de Azimut -->
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.2/leaflet.rotatedMarker.min.js"></script>
 
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; }
-        /* Lightbox adaptado para no salir de pantalla */
-        #lightbox-modal img {
-            max-width: 90vw;
-            max-height: 85vh;
-            object-fit: contain;
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 0;
+            font-family: Arial, sans-serif;
+            display: flex; height: 100vh;
+            background: #f0f2f5; color: #333;
+        }
+        #sidebar {
+            width: 360px;
+            background: #ffffff;
+            border-right: 1px solid #ccc;
+            display: flex; flex-direction: column;
+            z-index: 1000; shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+        #map { flex-grow: 1; height: 100%; }
+        
+        .header {
+            padding: 15px 20px;
+            background: #007bff; color: white;
+        }
+        .header h2 { margin: 0 0 5px 0; font-size: 18px; }
+        .header p { margin: 0; font-size: 12px; opacity: 0.9; }
+
+        #drop-zone {
+            margin: 15px;
+            border: 2px dashed #007bff;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            background: #f8f9fa;
+            color: #555;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        #drop-zone.dragover {
+            background: #e2e8f0; border-color: #0056b3;
+        }
+
+        .search-box { padding: 0 15px 10px 15px; }
+        .search-box input {
+            width: 100%; padding: 8px 10px; font-size: 12px;
+            border: 1px solid #ccc; border-radius: 4px; outline: none;
+        }
+
+        #file-list {
+            flex-grow: 1; overflow-y: auto; padding: 0 15px 15px 15px;
+        }
+        .photo-card {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px; margin-bottom: 8px;
+            background: #f8f9fa; border: 1px solid #e9ecef;
+            border-radius: 6px; cursor: pointer; transition: all 0.15s ease;
+        }
+        .photo-card:hover, .photo-card.active {
+            background: #e7f1ff; border-color: #70aceb;
+        }
+        .photo-card img {
+            width: 48px; height: 48px; object-fit: cover; border-radius: 4px;
+        }
+        .photo-info { flex-grow: 1; min-width: 0; }
+        .photo-info .name { font-size: 12px; font-weight: bold; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+        .photo-info .date { font-size: 10px; color: #6c757d; margin-top: 2px; }
+        .photo-info .azimuth { font-size: 10px; color: #007bff; font-weight: bold; margin-top: 2px; }
+
+        .footer { padding: 12px 15px; border-top: 1px solid #ddd; background: #fafafa; }
+        .btn-export {
+            width: 100%; padding: 8px; background: #28a745; color: white;
+            border: none; border-radius: 4px; font-size: 12px; font-weight: bold;
+            cursor: pointer; display: none;
+        }
+        .btn-export:hover { background: #218838; }
+
+        /* Popups del Mapa */
+        .leaflet-popup-content-wrapper { padding: 5px; border-radius: 6px; }
+        .popup-card { width: 220px; font-size: 12px; }
+        .popup-card b { color: #007bff; display: block; margin-bottom: 4px; }
+        .popup-card img {
+            width: 100%; height: 130px; object-fit: cover; border-radius: 4px;
+            margin: 6px 0; cursor: pointer;
+        }
+        .btn-copy {
+            width: 100%; padding: 5px; background: #007bff; color: white;
+            border: none; border-radius: 3px; font-size: 11px; cursor: pointer;
+            margin-top: 4px; font-weight: bold;
+        }
+        .btn-copy:hover { background: #0056b3; }
+
+        /* Lightbox */
+        #lightbox {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0, 0, 0, 0.85); z-index: 9999;
+            flex-direction: column; align-items: center; justify-content: center;
+        }
+        #lightbox img {
+            max-width: 90vw; max-height: 85vh; object-fit: contain; border-radius: 6px;
+        }
+        #lightbox .caption {
+            color: white; margin-top: 10px; font-size: 13px; font-weight: bold;
+        }
+        #lightbox .close {
+            position: absolute; top: 15px; right: 25px; color: white;
+            font-size: 30px; cursor: pointer; font-weight: bold;
         }
     </style>
 </head>
-<body class="bg-gray-100 h-screen flex overflow-hidden">
+<body>
 
-    <!-- PANEL LATERAL -->
-    <div class="w-96 bg-white shadow-xl flex flex-col z-20">
-        <div class="p-4 bg-blue-600 text-white">
-            <h1 class="text-lg font-bold">Visor de Inspección GeoEXIF</h1>
-            <p class="text-xs text-blue-100">Arrastra tus fotos de SharePoint o locales</p>
+    <div id="sidebar">
+        <div class="header">
+            <h2>Visor de Fotos GeoEXIF</h2>
+            <p>Arrastra tus fotos para posicionarlas en el mapa</p>
         </div>
 
-        <!-- Zona de Drag & Drop -->
-        <div id="drop-zone" class="m-4 border-2 border-dashed border-blue-400 rounded-lg p-6 text-center bg-blue-50 hover:bg-blue-100 cursor-pointer transition">
-            📁 <b class="text-sm text-blue-700">Arrastra tus fotos aquí</b><br>
-            <span class="text-xs text-gray-500">o haz clic para buscarlas</span>
-            <input type="file" id="file-input" multiple accept="image/jpeg, image/jpg" class="hidden">
+        <div id="drop-zone">
+            📁 <b>Arrastra tus fotos JPG aquí</b><br>
+            <span style="font-size: 11px;">o haz clic para seleccionarlas</span>
+            <input type="file" id="file-input" multiple accept="image/jpeg, image/jpg" style="display: none;">
         </div>
 
-        <!-- Buscador / Filtro -->
-        <div class="px-4 mb-2">
-            <input type="text" id="search-input" placeholder="🔍 Filtrar por nombre o fecha..." class="w-full px-3 py-2 text-xs border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <div class="search-box">
+            <input type="text" id="search-input" placeholder="🔍 Filtrar por nombre o fecha...">
         </div>
 
-        <!-- Listado de Fotos -->
-        <div class="flex-1 overflow-y-auto px-4 pb-4 space-y-2" id="file-list">
-            <div class="text-center text-gray-400 text-xs py-8">No hay imágenes cargadas.</div>
+        <div id="file-list">
+            <div style="text-align: center; color: #aaa; font-size: 12px; padding-top: 30px;">
+                No hay imágenes cargadas.
+            </div>
         </div>
 
-        <!-- Exportar GeoJSON -->
-        <div class="p-4 border-t bg-gray-50">
-            <button id="btn-export" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-4 rounded transition hidden">
-                📥 Descargar GeoJSON
-            </button>
+        <div class="footer">
+            <button id="btn-export" class="btn-export">📥 Exportar a GeoJSON</button>
         </div>
     </div>
 
-    <!-- MAPA -->
-    <div id="map" class="flex-1 h-full z-10"></div>
+    <div id="map"></div>
 
-    <!-- LIGHTBOX MODAL -->
-    <div id="lightbox-modal" class="fixed inset-0 bg-black/80 z-50 hidden flex flex-col items-center justify-center p-4">
-        <button onclick="closeLightbox()" class="absolute top-4 right-6 text-white text-3xl font-bold hover:text-gray-300">&times;</button>
-        <img id="lightbox-img" class="rounded-lg shadow-2xl mb-3" src="" alt="Ampliación">
-        <p id="lightbox-caption" class="text-white text-sm font-semibold bg-black/50 px-4 py-1 rounded-full"></p>
+    <div id="lightbox" onclick="closeLightbox()">
+        <span class="close">&times;</span>
+        <img id="lightbox-img" src="" alt="Foto">
+        <div id="lightbox-caption" class="caption"></div>
     </div>
 
     <!-- Leaflet JS -->
@@ -78,7 +167,22 @@
         }).addTo(map);
 
         const markersLayer = L.layerGroup().addTo(map);
-        let loadedPhotos = [];
+        let photosData = [];
+
+        // SVG personalizado para la flecha de Azimut / Rumbo
+        const arrowSvg = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+                <circle cx="16" cy="16" r="14" fill="#007bff" stroke="#ffffff" stroke-width="2" opacity="0.9"/>
+                <path d="M16 4 L23 24 L16 19 L9 24 Z" fill="#ffffff"/>
+            </svg>`;
+        
+        const arrowIcon = L.divIcon({
+            html: arrowSvg,
+            className: '',
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            popupAnchor: [0, -16]
+        });
 
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
@@ -87,16 +191,15 @@
         const btnExport = document.getElementById('btn-export');
 
         dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('bg-blue-100'); });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('bg-blue-100'));
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
-            dropZone.classList.remove('bg-blue-100');
+            dropZone.classList.remove('dragover');
             handleFiles(e.dataTransfer.files);
         });
         fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-
-        searchInput.addEventListener('input', renderPhotoList);
+        searchInput.addEventListener('input', renderList);
 
         function extraerFechaDeNombre(filename) {
             const match = filename.match(/(\d{8})_(\d{6})/);
@@ -114,7 +217,6 @@
                 if (!file.type.match('image/jpeg') && !file.name.match(/\.(jpg|jpeg)$/i)) continue;
 
                 try {
-                    // Extraer GPS y Azimut (GPSImgDirection)
                     const exifData = await exifr.parse(file, { gps: true, pick: ['GPSImgDirection', 'GPSDestBearing'] });
                     const gps = await exifr.gps(file);
 
@@ -125,129 +227,136 @@
                         const azimut = exifData?.GPSImgDirection || exifData?.GPSDestBearing || null;
                         const objectURL = URL.createObjectURL(file);
 
-                        const photoObj = {
+                        const item = {
+                            id: 'photo-' + Math.random().toString(36).substr(2, 9),
                             name: file.name,
                             lat: lat,
                             lon: lon,
                             fecha: fecha,
-                            azimut: azimut ? Math.round(azimut) : null,
-                            url: objectURL,
-                            file: file
+                            azimut: azimut !== null ? Math.round(azimut) : null,
+                            url: objectURL
                         };
 
-                        loadedPhotos.push(photoObj);
+                        photosData.push(item);
                         bounds.push([lat, lon]);
-                        addMarkerToMap(photoObj);
+                        createMarker(item);
                     }
-                } catch (error) {
-                    console.error(`Error leyendo ${file.name}:`, error);
+                } catch (err) {
+                    console.error("Error leyendo metadatos:", err);
                 }
             }
 
             if (bounds.length > 0) {
                 map.fitBounds(bounds, { padding: [50, 50] });
-                btnExport.classList.remove('hidden');
-                renderPhotoList();
+                btnExport.style.display = 'block';
+                renderList();
             }
         }
 
-        function addMarkerToMap(photo) {
-            const marker = L.marker([photo.lat, photo.lon]).addTo(markersLayer);
+        function createMarker(item) {
+            let markerOptions = {};
+            
+            // Si incluye Azimut, aplicamos el icono flecha rotado con Leaflet.RotatedMarker
+            if (item.azimut !== null) {
+                markerOptions = {
+                    icon: arrowIcon,
+                    rotationAngle: item.azimut,
+                    rotationOrigin: 'center center'
+                };
+            }
 
-            // 1. Tooltip al pasar el ratón (Hover)
-            marker.bindTooltip(`<b>${photo.name}</b><br><small>${photo.fecha}</small>`, {
+            const marker = L.marker([item.lat, item.lon], markerOptions).addTo(markersLayer);
+
+            // 1. Hover tooltip
+            marker.bindTooltip(`<b>${item.name}</b><br>${item.fecha}`, {
                 direction: 'top',
-                offset: [0, -10],
-                opacity: 0.9
+                offset: [0, -10]
             });
 
-            // 2. Popup detallado al hacer clic (Mantiene el zoom uniforme)
-            const popupContent = `
-                <div class="p-1 max-w-xs">
-                    <b class="text-blue-900 text-sm block mb-1">${photo.name}</b>
-                    <div class="text-xs text-gray-600 mb-1">📅 ${photo.fecha}</div>
-                    <div class="text-xs text-gray-600 mb-1">📍 ${photo.lat.toFixed(6)}, ${photo.lon.toFixed(6)}</div>
-                    ${photo.azimut !== null ? `<div class="text-xs text-gray-600 mb-2">🧭 Azimut: ${photo.azimut}°</div>` : ''}
-                    <img src="${photo.url}" class="w-full h-36 object-cover rounded-md cursor-pointer mb-2 hover:opacity-90 transition" onclick="openLightbox('${photo.url}', '${photo.name}')" alt="Foto">
-                    <button onclick="copiarCoordenadas(${photo.lat}, ${photo.lon})" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1 px-2 rounded transition">
-                        📋 Copiar Coordenadas
-                    </button>
+            // 2. Popup al hacer clic (Sin alterar el zoom del mapa)
+            const popupHtml = `
+                <div class="popup-card">
+                    <b>${item.name}</b>
+                    <div>📅 ${item.fecha}</div>
+                    <div>📍 ${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}</div>
+                    ${item.azimut !== null ? `<div>🧭 Azimut: ${item.azimut}°</div>` : ''}
+                    <img src="${item.url}" onclick="openLightbox('${item.url}', '${item.name}')" alt="Foto">
+                    <button class="btn-copy" onclick="copiarCoordenadas(${item.lat}, ${item.lon})">📋 Copiar Coordenadas</button>
                 </div>
             `;
-            marker.bindPopup(popupContent);
+            marker.bindPopup(popupHtml);
 
-            // Sincronizar hover con la lista lateral
+            // Efecto Hover Bidireccional
             marker.on('mouseover', () => {
-                const el = document.getElementById(`card-${photo.name}`);
-                if (el) el.classList.add('bg-blue-50', 'border-blue-400');
+                const card = document.getElementById(item.id);
+                if (card) card.classList.add('active');
             });
             marker.on('mouseout', () => {
-                const el = document.getElementById(`card-${photo.name}`);
-                if (el) el.classList.remove('bg-blue-50', 'border-blue-400');
+                const card = document.getElementById(item.id);
+                if (card) card.classList.remove('active');
             });
 
-            photo.marker = marker;
+            item.marker = marker;
         }
 
-        function renderPhotoList() {
+        function renderList() {
             const query = searchInput.value.toLowerCase();
             fileList.innerHTML = '';
 
-            const filtered = loadedPhotos.filter(p => p.name.toLowerCase().includes(query) || p.fecha.toLowerCase().includes(query));
+            const filtered = photosData.filter(p => p.name.toLowerCase().includes(query) || p.fecha.toLowerCase().includes(query));
 
             if (filtered.length === 0) {
-                fileList.innerHTML = `<div class="text-center text-gray-400 text-xs py-8">No se encontraron resultados.</div>`;
+                fileList.innerHTML = `<div style="text-align: center; color: #aaa; font-size: 12px; padding-top: 30px;">No se encontraron resultados.</div>`;
                 return;
             }
 
-            filtered.forEach(photo => {
-                const div = document.createElement('div');
-                div.id = `card-${photo.name}`;
-                div.className = "flex items-center gap-3 p-2 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 transition";
-                div.innerHTML = `
-                    <img src="${photo.url}" class="w-12 h-12 object-cover rounded shadow-sm" onclick="event.stopPropagation(); openLightbox('${photo.url}', '${photo.name}')">
-                    <div class="flex-1 min-w-0">
-                        <p class="text-xs font-bold text-gray-800 truncate">${photo.name}</p>
-                        <p class="text-[10px] text-gray-500">${photo.fecha}</p>
-                        ${photo.azimut !== null ? `<p class="text-[10px] text-blue-600 font-semibold">🧭 ${photo.azimut}°</p>` : ''}
+            filtered.forEach(item => {
+                const card = document.createElement('div');
+                card.id = item.id;
+                card.className = 'photo-card';
+                card.innerHTML = `
+                    <img src="${item.url}" onclick="event.stopPropagation(); openLightbox('${item.url}', '${item.name}')">
+                    <div class="photo-info">
+                        <div class="name" title="${item.name}">${item.name}</div>
+                        <div class="date">${item.fecha}</div>
+                        ${item.azimut !== null ? `<div class="azimuth">🧭 Azimut: ${item.azimut}°</div>` : ''}
                     </div>
                 `;
 
-                // Al hacer clic en la tarjeta del panel lateral, centra el mapa en el punto y abre su popup
-                div.addEventListener('click', () => {
-                    map.setView([photo.lat, photo.lon], 18);
-                    photo.marker.openPopup();
+                card.addEventListener('click', () => {
+                    // Mantiene el nivel de zoom actual o establece zoom 18 si es lejano
+                    const currentZoom = map.getZoom();
+                    map.setView([item.lat, item.lon], Math.max(currentZoom, 17));
+                    item.marker.openPopup();
                 });
 
-                fileList.appendChild(div);
+                fileList.appendChild(card);
             });
         }
 
         function copiarCoordenadas(lat, lon) {
             const texto = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
             navigator.clipboard.writeText(texto).then(() => {
-                alert(`¡Coordenadas copiadas al portapapeles!\n${texto}`);
+                alert(`Coordenadas copiadas al portapapeles:\n${texto}`);
             });
         }
 
-        function openLightbox(url, name) {
+        function openLightbox(url, caption) {
             document.getElementById('lightbox-img').src = url;
-            document.getElementById('lightbox-caption').innerText = name;
-            document.getElementById('lightbox-modal').classList.remove('hidden');
+            document.getElementById('lightbox-caption').innerText = caption;
+            document.getElementById('lightbox').style.display = 'flex';
         }
 
         function closeLightbox() {
-            document.getElementById('lightbox-modal').classList.add('hidden');
+            document.getElementById('lightbox').style.display = 'none';
         }
 
-        // Cerrar lightbox con tecla ESC
         window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeLightbox();
         });
 
-        // Exportar a GeoJSON
         btnExport.addEventListener('click', () => {
-            const features = loadedPhotos.map(p => ({
+            const features = photosData.map(p => ({
                 type: "Feature",
                 geometry: {
                     type: "Point",
@@ -256,8 +365,7 @@
                 properties: {
                     archivo: p.name,
                     fecha: p.fecha,
-                    azimut: p.azimut,
-                    imagen_url: p.url
+                    azimut: p.azimut
                 }
             }));
 
@@ -266,7 +374,7 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = "datos_inspeccion.geojson";
+            a.download = "inspeccion_fotos.geojson";
             a.click();
         });
     </script>
