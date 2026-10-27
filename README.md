@@ -1,7 +1,6 @@
 <h1>Introducción - ES</h1>
-Bienvenid@ al repositorio del visor de imágenes geoetiquetadas. El objetivo de este proyecto es poder prestar soporte al equipo de delineación mediante un visor web ligero y sencillo de usar donde puedan
-comprobarse las imágenes tomadas en campo para verificar la existencia de afecciones o elementos del suelo en el estudio de tramos subterráneos.
-<h3>https://geotagged-image-viewer.dsanchez-iplan.workers.dev</h3>
+El objetivo de este proyecto es desarrollar una herramienta ligera, sencilla de usar y rápida para situaciones de diseño coordinado con topografía con un gran volumen de imágenes georreferenciadas, usadas para evaluar y detectar afecciones invisibles sobre el plano pero existentes en la vida real.
+<h3>Live demo: https://geotagged-image-viewer.dsanchez-iplan.workers.dev</h3>
 
 <h2>Interfaz de uso</h2>
 <img width="1868" height="955" alt="image" src="https://github.com/user-attachments/assets/e9936d44-a327-4614-a51a-b6470eb0b2a6" />
@@ -66,9 +65,8 @@ El código está estructurado en un único archivo modularizado mediante JavaScr
 
 # Introduction - EN
 
-Welcome to the geotagged image viewer repository. The objective of this project is to support the detailing team through a lightweight and user-friendly web viewer where they can check images taken in the field to verify the existence of utilities or ground elements in the study of underground sections.
-
-### [https://geotagged-image-viewer.dsanchez-iplan.workers.dev](https://geotagged-image-viewer.dsanchez-iplan.workers.dev)
+The goal of this project is to develop a lightweight, user-friendly, and fast tool for scenarios involving design coordinated with topography with a large volume of georeferenced images, used to evaluate and detect utilities or conflicts that are invisible on the plan but exist in real life.
+<h3>Live demo: https://geotagged-image-viewer.dsanchez-iplan.workers.dev</h3>
 
 ## User Interface
 <img width="1868" height="955" alt="image" src="https://github.com/user-attachments/assets/e9936d44-a327-4614-a51a-b6470eb0b2a6" />
