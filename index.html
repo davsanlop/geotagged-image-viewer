@@ -72,7 +72,6 @@
             border-left-color: #dc3545;
             color: #721c24;
         }
-        /* Estilos del Pop-up del mapa */
         .leaflet-popup-content img {
             max-width: 200px;
             border-radius: 4px;
@@ -104,10 +103,9 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // Inicializar el Mapa centrado por defecto en España (ajustable)
+        // Inicializar el Mapa centrado en España
         const map = L.map('map').setView([40.4168, -3.7038], 6);
 
-        // Capa base de OpenStreetMap
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '© OpenStreetMap contributors'
@@ -118,7 +116,6 @@
         const fileInput = document.getElementById('file-input');
         const fileList = document.getElementById('file-list');
 
-        // Eventos de arrastrar y soltar
         dropZone.addEventListener('click', () => fileInput.click());
         
         dropZone.addEventListener('dragover', (e) => {
@@ -140,6 +137,17 @@
             handleFiles(e.target.files);
         });
 
+        // Extraer fecha y hora del nombre del archivo (ej: TimePhoto_20261014_113931.jpg)
+        function extraerFechaDeNombre(filename) {
+            const match = filename.match(/(\d{8})_(\d{6})/);
+            if (match) {
+                const f = match[1];
+                const h = match[2];
+                return `${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6,8)} ${h.slice(0,2)}:${h.slice(2,4)}:${h.slice(4,6)}`;
+            }
+            return "Fecha desconocida";
+        }
+
         async function handleFiles(files) {
             let bounds = [];
 
@@ -147,16 +155,15 @@
                 if (!file.type.match('image/jpeg') && !file.name.match(/\.(jpg|jpeg)$/i)) continue;
 
                 try {
-                    // Extraer metadatos EXIF y GPS usando la librería exifr
+                    // Extraer coordenadas GPS usando exifr
                     const gps = await exifr.gps(file);
-                    const datetime = await exifr.string(file, 'DateTimeOriginal');
 
                     if (gps && gps.latitude && gps.longitude) {
                         const lat = gps.latitude;
                         const lon = gps.longitude;
-                        const fecha = datetime || "Fecha desconocida";
+                        const fecha = extraerFechaDeNombre(file.name);
 
-                        // Crear URL temporal local (blob) para previsualizar la foto en el navegador
+                        // Crear URL temporal local (blob) para previsualizar la foto
                         const objectURL = URL.createObjectURL(file);
 
                         // Añadir marcador al mapa
@@ -168,8 +175,6 @@
                         `);
 
                         bounds.push([lat, lon]);
-
-                        // Registrar en la barra lateral
                         addLog(`✅ ${file.name} procesada con éxito.`, false);
                     } else {
                         addLog(`⚠️ ${file.name}: Sin datos GPS en EXIF.`, true);
@@ -179,7 +184,6 @@
                 }
             }
 
-            // Ajustar el zoom del mapa para encuadrar las nuevas fotos añadidas
             if (bounds.length > 0) {
                 map.fitBounds(bounds, { padding: [50, 50] });
             }
