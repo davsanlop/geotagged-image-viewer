@@ -722,10 +722,10 @@
                 dxf.push(`0\nLINE\n8\nFOTOS_AZIMUT\n10\n${xUtm.toFixed(3)}\n20\n${yUtm.toFixed(3)}\n30\n0.0\n11\n${xTarget.toFixed(3)}\n21\n${yTarget.toFixed(3)}\n31\n0.0`);
 
                 // Texto Nombre
-                dxf.push(`0\nTEXT\n8\nFOTOS_TEXTO\n10\n${(xUtm + 1.2).toFixed(3)}\n20\n${(yUtm + 1.2).toFixed(3)}\n30\n0.0\n40\n1.2\n1\n${photo.name}`);
+                dxf.push(`0\nTEXT\n8\nFOTOS_TEXTO\n10\n${(xUtm + 1.2).toFixed(3)}\n20\n${(yUtm + 0.5).toFixed(3)}\n30\n0.0\n40\n1.2\n1\n${photo.name}`);
                 
                 // Texto Fecha y Azimut
-                dxf.push(`0\nTEXT\n8\nFOTOS_COORD\n10\n${(xUtm + 1.2).toFixed(3)}\n20\n${(yUtm - 0.5).toFixed(3)}\n30\n0.0\n40\n0.8\n1\nAz: ${Math.round(azimuth)}° | ${photo.date}`);
+                dxf.push(`0\nTEXT\n8\nFOTOS_COORD\n10\n${(xUtm + 1.2).toFixed(3)}\n20\n${(yUtm - 0.8).toFixed(3)}\n30\n0.0\n40\n0.8\n1\nAz: ${Math.round(azimuth)}° | ${photo.date}`);
             });
 
             dxf.push("0\nENDSEC\n0\nEOF");
