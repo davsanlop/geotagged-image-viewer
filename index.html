@@ -708,12 +708,11 @@
             validPhotos.forEach(photo => {
                 const [xUtm, yUtm] = proj4('WGS84', utmProjStr, [photo.lon, photo.lat]);
 
-                // Extraer base del nombre (sin extensión)
+                // Extraer nombre base y separar autor y número a partir de la barra baja (_)
                 const baseName = photo.name.replace(/\.[^/.]+$/, "");
-                // Número de foto: dos últimos caracteres
-                const photoNum = baseName.slice(-2);
-                // Autor: primera parte del archivo (DAVID o JC)
-                const authorPart = baseName.split(/[_\-\s]/)[0].toUpperCase();
+                const parts = baseName.split('_');
+                const authorPart = parts[0].toUpperCase();
+                const photoNum = parts.length > 1 ? parts.slice(1).join('_') : baseName.slice(-2);
 
                 // Ángulo en radianes para AutoCAD (0° = Este, sentido antihorario)
                 const azimuth = (photo.azimuth !== null && !isNaN(photo.azimuth)) ? photo.azimuth : 0;
@@ -738,55 +737,30 @@
                 const yL2 = yUtm - R * py;
                 dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${xL1.toFixed(3)}\n20\n${yL1.toFixed(3)}\n30\n0.0\n11\n${xL2.toFixed(3)}\n21\n${yL2.toFixed(3)}\n31\n0.0`);
 
-                // 3. Punta de flecha sólida (SOLID) alrededor del semicírculo frontal sin tapar el interior
-                // Vértices de la punta de flecha circunscrita (radio exterior = 2*R en el vértice, base en aletas laterales)
-                const apexX = xUtm + (2 * R) * ux;
-                const apexY = yUtm + (2 * R) * uy;
+                // 3. Punta de flecha sólida (SOLID) ajustada a la referencia visual
+                const apexX = xUtm + (R + 0.65 * R) * ux;
+                const apexY = yUtm + (R + 0.65 * R) * uy;
                 
-                // Puntos tangentes a 45° respecto al eje de dirección
-                const cos45 = Math.SQRT1_2;
-                const sin45 = Math.SQRT1_2;
-                const leftContactX = xUtm + R * (cos45 * ux + sin45 * px);
-                const leftContactY = yUtm + R * (cos45 * uy + sin45 * py);
-                const rightContactX = xUtm + R * (cos45 * ux - sin45 * px);
-                const rightContactY = yUtm + R * (cos45 * uy - sin45 * py);
+                const leftWingX = xUtm + 0.1 * R * ux + 1.15 * R * px;
+                const leftWingY = yUtm + 0.1 * R * uy + 1.15 * R * py;
+                const rightWingX = xUtm + 0.1 * R * ux - 1.15 * R * px;
+                const rightWingY = yUtm + 0.1 * R * uy - 1.15 * R * py;
 
-                // Extremos de las alas de la flecha
-                const wingScale = 1.48;
-                const leftWingX = xUtm + (R * wingScale) * (0.25 * ux + 0.97 * px);
-                const leftWingY = yUtm + (R * wingScale) * (0.25 * uy + 0.97 * py);
-                const rightWingX = xUtm + (R * wingScale) * (0.25 * ux - 0.97 * px);
-                const rightWingY = yUtm + (R * wingScale) * (0.25 * uy - 0.97 * py);
+                dxf.push(`0\nSOLID\n8\n${layer}\n${colorRed}\n10\n${apexX.toFixed(3)}\n20\n${apexY.toFixed(3)}\n30\n0.0\n11\n${leftWingX.toFixed(3)}\n21\n${leftWingY.toFixed(3)}\n31\n0.0\n12\n${rightWingX.toFixed(3)}\n22\n${rightWingY.toFixed(3)}\n32\n0.0\n13\n${rightWingX.toFixed(3)}\n23\n${rightWingY.toFixed(3)}\n33\n0.0`);
 
-                // Relleno SOLID dividido en segmentos para mantener el círculo completamente libre por dentro
-                // Triángulo central de la punta
-                dxf.push(`0\nSOLID\n8\n${layer}\n${colorRed}\n10\n${apexX.toFixed(3)}\n20\n${apexY.toFixed(3)}\n30\n0.0\n11\n${leftContactX.toFixed(3)}\n21\n${leftContactY.toFixed(3)}\n31\n0.0\n12\n${rightContactX.toFixed(3)}\n22\n${rightContactY.toFixed(3)}\n32\n0.0\n13\n${rightContactX.toFixed(3)}\n23\n${rightContactY.toFixed(3)}\n33\n0.0`);
-                
-                // Ala izquierda (entre contacto 45°, punto tangente intermedio y extremo izquierdo)
-                const leftMidX = xUtm + R * (0.38 * ux + 0.92 * px);
-                const leftMidY = yUtm + R * (0.38 * uy + 0.92 * py);
-                dxf.push(`0\nSOLID\n8\n${layer}\n${colorRed}\n10\n${leftContactX.toFixed(3)}\n20\n${leftContactY.toFixed(3)}\n30\n0.0\n11\n${leftMidX.toFixed(3)}\n21\n${leftMidY.toFixed(3)}\n31\n0.0\n12\n${leftWingX.toFixed(3)}\n22\n${leftWingY.toFixed(3)}\n32\n0.0\n13\n${leftWingX.toFixed(3)}\n23\n${leftWingY.toFixed(3)}\n33\n0.0`);
-
-                // Ala derecha (entre contacto 45°, punto tangente intermedio y extremo derecho)
-                const rightMidX = xUtm + R * (0.38 * ux - 0.92 * px);
-                const rightMidY = yUtm + R * (0.38 * uy - 0.92 * py);
-                dxf.push(`0\nSOLID\n8\n${layer}\n${colorRed}\n10\n${rightContactX.toFixed(3)}\n20\n${rightContactY.toFixed(3)}\n30\n0.0\n11\n${rightMidX.toFixed(3)}\n21\n${rightMidY.toFixed(3)}\n31\n0.0\n12\n${rightWingX.toFixed(3)}\n22\n${rightWingY.toFixed(3)}\n32\n0.0\n13\n${rightWingX.toFixed(3)}\n23\n${rightWingY.toFixed(3)}\n33\n0.0`);
-
-                // 4. Textos interiores (rotados siguiendo la orientación del símbolo)
-                // Rotación del texto en grados para que quede paralelo a la línea divisoria
+                // 4. Textos interiores (tamaño reducido para encajar perfectamente)
                 const textRotDeg = ((theta - Math.PI / 2) * 180) / Math.PI;
-                const textHeight = 0.45 * R;
+                const textHeight = 0.25 * R; // Tamaño reducido
 
-                // Mitad superior: Número de foto (2 últimos caracteres)
-                const topTextX = xUtm + (0.48 * R) * ux;
-                const topTextY = yUtm + (0.48 * R) * uy;
+                // Mitad superior: Número de foto (a partir de la barra baja)
+                const topTextX = xUtm + (0.45 * R) * ux;
+                const topTextY = yUtm + (0.45 * R) * uy;
                 dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${topTextX.toFixed(3)}\n20\n${topTextY.toFixed(3)}\n30\n0.0\n40\n${textHeight.toFixed(3)}\n1\n${photoNum}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${topTextX.toFixed(3)}\n21\n${topTextY.toFixed(3)}\n31\n0.0\n73\n2`);
 
-                // Mitad inferior: Autor (primera parte del archivo: DAVID o JC)
-                const botTextX = xUtm - (0.48 * R) * ux;
-                const botTextY = yUtm - (0.48 * R) * uy;
-                // Ajustar escala si el texto es largo (como DAVID) para que quepa dentro del semicírculo
-                const authorTextHeight = authorPart.length > 3 ? (0.32 * R) : (0.45 * R);
+                // Mitad inferior: Autor (DAVID / JC)
+                const botTextX = xUtm - (0.45 * R) * ux;
+                const botTextY = yUtm - (0.45 * R) * uy;
+                const authorTextHeight = authorPart.length > 3 ? (0.21 * R) : (0.25 * R);
                 dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${botTextX.toFixed(3)}\n20\n${botTextY.toFixed(3)}\n30\n0.0\n40\n${authorTextHeight.toFixed(3)}\n1\n${authorPart}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${botTextX.toFixed(3)}\n21\n${botTextY.toFixed(3)}\n31\n0.0\n73\n2`);
             });
 
