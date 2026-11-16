@@ -689,7 +689,7 @@
             URL.revokeObjectURL(url);
         });
 
-        // --- EXPORTAR A DXF (AutoCAD) con el Bloque BricsCAD Personalizado ---
+        // --- EXPORTAR A DXF (AutoCAD) con Geometría Paramétrica Exacta ---
         btnExportDXF.addEventListener('click', () => {
             const validPhotos = photosData.filter(p => p.hasGps);
             if (validPhotos.length === 0) return;
@@ -705,10 +705,6 @@
             dxf.push("0\nSECTION\n2\nBLOCKS\n0\nENDSEC");
             dxf.push("0\nSECTION\n2\nENTITIES");
 
-            // Centro local del bloque exportado de BricsCAD
-            const Cx = 0.546634;
-            const Cy = -0.000440;
-
             validPhotos.forEach(photo => {
                 const [xUtm, yUtm] = proj4('WGS84', utmProjStr, [photo.lon, photo.lat]);
 
@@ -718,67 +714,47 @@
                 const authorPart = parts[0].toUpperCase();
                 const photoNum = parts.length > 1 ? parts.slice(1).join('_') : baseName.slice(-2);
 
-                // Ángulo en radianes para AutoCAD (Azimut)
+                // Azimut en radianes (Topografía: 0 = Norte, 90 = Este)
                 const azimuth = (photo.azimuth !== null && !isNaN(photo.azimuth)) ? photo.azimuth : 0;
-                const theta = ((90 - azimuth) * Math.PI) / 180;
-                const cosT = Math.cos(theta);
-                const sinT = Math.sin(theta);
+                const azRad = azimuth * Math.PI / 180;
 
-                // Función auxiliar para transformar puntos locales del bloque a coordenadas globales UTM
-                function tPt(lx, ly) {
-                    const rx = lx - Cx;
-                    const ry = ly - Cy;
-                    const gx = xUtm + (rx * cosT - ry * sinT);
-                    const gy = yUtm + (rx * sinT + ry * cosT);
-                    return [gx, gy];
-                }
+                // Vectores de orientación: Norte = +Y, Este = +X
+                const ux = Math.sin(azRad);
+                const uy = Math.cos(azRad);
+                const px = -uy; // Perpendicular izquierda
+                const py = ux;
 
-                // Rotación base de los textos en radianes dentro del bloque
-                const baseTextRotRad = 359.962856828467 * Math.PI / 180;
-                const textRotDeg = ((baseTextRotRad + theta) * 180) / Math.PI;
-
+                const R = 0.375; // Radio exacto del bloque original de BricsCAD
                 const layer = "0_FOTO_CAMARA";
                 const colorRed = "62\n1"; // ACI 1 = Rojo
 
-                // 1. TEXTO SUPERIOR (Número de foto)
-                const [t1x, t1y] = tPt(0.468834179396, 0.121425296952);
-                const [a1x, a1y] = tPt(0.546989621551, 0.168249683433);
-                dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${t1x.toFixed(6)}\n20\n${t1y.toFixed(6)}\n30\n0.0\n40\n0.093750085032\n1\n${photoNum}\n50\n${textRotDeg.toFixed(4)}\n72\n1\n11\n${a1x.toFixed(6)}\n21\n${a1y.toFixed(6)}\n31\n0.0\n73\n2`);
+                // 1. Círculo principal
+                dxf.push(`0\nCIRCLE\n8\n${layer}\n${colorRed}\n10\n${xUtm.toFixed(4)}\n20\n${yUtm.toFixed(4)}\n30\n0.0\n40\n${R}`);
 
-                // 2. TEXTO INFERIOR (Autor)
-                const [t2x, t2y] = tPt(0.362782747622, -0.208603092954);
-                const [a2x, a2y] = tPt(0.546558401352, -0.169347185344);
-                dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${t2x.toFixed(6)}\n20\n${t2y.toFixed(6)}\n30\n0.0\n40\n0.078750071427\n1\n${authorPart}\n50\n${textRotDeg.toFixed(4)}\n72\n1\n11\n${a2x.toFixed(6)}\n21\n${a2y.toFixed(6)}\n31\n0.0\n73\n2`);
+                // 2. Línea diametral (perpendicular al azimut)
+                const p1x = xUtm + R * px;
+                const p1y = yUtm + R * py;
+                const p2x = xUtm - R * px;
+                const p2y = yUtm - R * py;
+                dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${p1x.toFixed(4)}\n20\n${p1y.toFixed(4)}\n30\n0.0\n11\n${p2x.toFixed(4)}\n21\n${p2y.toFixed(4)}\n31\n0.0`);
 
-                // 3. CÍRCULO PRINCIPAL
-                const [cx, cy] = tPt(0.546634004211, -0.000440825147);
-                dxf.push(`0\nCIRCLE\n8\n${layer}\n${colorRed}\n10\n${cx.toFixed(6)}\n20\n${cy.toFixed(6)}\n30\n0.0\n40\n0.375000340118`);
+                // 3. Triángulo sólido de azimut (SOLID) con base en la línea diametral y ápice hacia el azimut
+                const apexX = xUtm + (R * 1.5) * ux;
+                const apexY = yUtm + (R * 1.5) * uy;
+                dxf.push(`0\nSOLID\n8\n${layer}\n${colorRed}\n10\n${apexX.toFixed(4)}\n20\n${apexY.toFixed(4)}\n30\n0.0\n11\n${p1x.toFixed(4)}\n21\n${p1y.toFixed(4)}\n31\n0.0\n12\n${p2x.toFixed(4)}\n22\n${p2y.toFixed(4)}\n32\n0.0\n13\n${p2x.toFixed(4)}\n23\n${p2y.toFixed(4)}\n33\n0.0`);
 
-                // 4. LÍNEA DIAMETRAL
-                const [lx1, ly1] = tPt(0.921634198636, -0.000771443761);
-                const [lx2, ly2] = tPt(0.171633809897, -0.000110206183);
-                dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${lx1.toFixed(6)}\n20\n${ly1.toFixed(6)}\n30\n0.0\n11\n${lx2.toFixed(6)}\n21\n${ly2.toFixed(6)}\n31\n0.0`);
+                // Ángulo de rotación de los textos para AutoCAD
+                const textRotDeg = 90 - azimuth;
 
-                // 5. HATCH (Triángulo Sólido de Azimut)
-                const hVerts = [
-                    [0.265602542069, 0.247846453014],
-                    [0.171633809706, -0.000110206268],
-                    [0.046633744886, 0.000000000000],
-                    [0.265602542047, 0.247846453033],
-                    [0.547133852571, 0.566506178325],
-                    [0.828102833579, 0.247350524882],
-                    [1.046634263293, -0.000881650099],
-                    [0.921634198474, -0.000771443839],
-                    [0.828102833598, 0.247350524898]
-                ];
-                
-                const gVerts = hVerts.map(v => tPt(v[0], v[1]));
-                
-                dxf.push(`0\nHATCH\n8\n${layer}\n${colorRed}\n10\n0.0\n20\n0.0\n30\n0.0\n210\n0.0\n220\n0.0\n230\n1.0\n2\nSOLID\n70\n1\n71\n1\n91\n1\n92\n3\n72\n1\n73\n1\n93\n${gVerts.length}`);
-                gVerts.forEach(gv => {
-                    dxf.push(`10\n${gv[0].toFixed(6)}\n20\n${gv[1].toFixed(6)}\n42\n0.0`);
-                });
-                dxf.push(`97\n1\n75\n0\n76\n1\n98\n1\n10\n0.0\n20\n0.0`);
+                // 4. Texto Superior (Número de foto)
+                const topTextX = xUtm + (0.45 * R) * ux;
+                const topTextY = yUtm + (0.45 * R) * uy;
+                dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${topTextX.toFixed(4)}\n20\n${topTextY.toFixed(4)}\n30\n0.0\n40\n0.09375\n1\n${photoNum}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${topTextX.toFixed(4)}\n21\n${topTextY.toFixed(4)}\n31\n0.0\n73\n2`);
+
+                // 5. Texto Inferior (Autor: DAVID / JC)
+                const botTextX = xUtm - (0.45 * R) * ux;
+                const botTextY = yUtm - (0.45 * R) * uy;
+                dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${botTextX.toFixed(4)}\n20\n${botTextY.toFixed(4)}\n30\n0.0\n40\n0.07875\n1\n${authorPart}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${botTextX.toFixed(4)}\n21\n${botTextY.toFixed(4)}\n31\n0.0\n73\n2`);
             });
 
             dxf.push("0\nENDSEC\n0\nEOF");
