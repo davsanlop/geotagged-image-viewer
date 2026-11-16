@@ -102,7 +102,7 @@
 <body class="bg-slate-100 text-slate-800 font-sans h-screen flex flex-col md:flex-row overflow-hidden">
 
     <!-- PANEL LATERAL (SIDEBAR) -->
-    <aside class="w-full md:w-96 bg-white flex flex-col h-1/2 md:h-full border-r border-slate-200 shadow-xl z-20">
+    <aside class="w-full md:w-100 bg-white flex flex-col h-1/2 md:h-full border-r border-slate-200 shadow-xl z-20">
         
         <!-- Header Principal -->
         <div class="p-4 bg-brand-900 text-white flex items-center justify-between shadow-md">
@@ -263,18 +263,68 @@
         markersGroup.addTo(map);
 
         // --- ELEMENTOS DEL DOM ---
-        const dropZone = document.getElementById('drop-zone');
-        const fileInput = document.getElementById('file-input');
-        const itemsContainer = document.getElementById('items-container');
-        const emptyState = document.getElementById('empty-state');
+        // --- 1. REFERENCIAS AL DOM (Asegurando que no sean null) ---
+        const dropZone = document.getElementById('drop-zone') || document.getElementById('dropZone');
+        const fileInput = document.getElementById('file-input') || document.getElementById('fileInput');
         const searchInput = document.getElementById('search-input');
-        const counterBadge = document.getElementById('counter-badge');
+        const itemsContainer = document.getElementById('items-container');
         const statusText = document.getElementById('status-text');
+        const counterBadge = document.getElementById('counter-badge');
         const gpsStats = document.getElementById('gps-stats');
+        const emptyState = document.getElementById('empty-state');
         const btnExportGeoJSON = document.getElementById('btn-export-geojson');
         const btnExportDXF = document.getElementById('btn-export-dxf');
         const btnReset = document.getElementById('btn-reset');
-        const btnCenterMap = document.getElementById('btn-center-map');
+
+        // --- 2. CONFIGURACIÓN DE EVENTOS DE CARGA (DRAG & DROP Y CLIC) ---
+        if (dropZone && fileInput) {
+            // Al hacer clic en la zona de carga, se abre el explorador de archivos
+            dropZone.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            // Evitar comportamiento por defecto al arrastrar sobre la zona
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.add('bg-brand-50', 'border-brand-500');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.remove('bg-brand-50', 'border-brand-500');
+                }, false);
+            });
+
+            // Manejar el evento de soltar carpetas/archivos (Drop)
+            dropZone.addEventListener('drop', async (e) => {
+                const items = e.dataTransfer.items;
+                if (items && items.length > 0) {
+                    if (statusText) statusText.innerText = 'Escaneando carpetas y archivos...';
+                    const extractedFiles = await getFilesFromDataTransferItems(items);
+                    if (extractedFiles.length > 0) {
+                        processFiles(extractedFiles);
+                    } else {
+                        if (statusText) statusText.innerText = 'No se encontraron archivos compatibles';
+                    }
+                } else if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    processFiles(e.dataTransfer.files);
+                }
+            });
+
+            // Manejar la selección manual mediante el explorador de archivos
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                    processFiles(e.target.files);
+                    // Limpiar el valor para permitir volver a cargar el mismo directorio si es necesario
+                    fileInput.value = '';
+                }
+            });
+        }
 
         // Lightbox DOM
         const lightbox = document.getElementById('lightbox');
