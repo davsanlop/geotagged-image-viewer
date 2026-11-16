@@ -213,6 +213,7 @@
         let photosData = []; 
         let markersGroup = L.featureGroup(); 
         let currentLightboxIndex = 0;
+        let hiddenDates = new Set(); // <--- NUEVO: Conjunto para almacenar fechas ocultas
 
         let lbScale = 1;
         let lbPosX = 0;
@@ -567,7 +568,7 @@
             return marker;
         }
 
-        // --- ACTUALIZAR UI ---
+        // --- ACTUALIZAR UI (Con control de visibilidad por fecha) ---
         function updateUI() {
             const query = searchInput.value.toLowerCase();
             let filteredPhotos = photosData.filter(p => p.name.toLowerCase().includes(query) || p.date.toLowerCase().includes(query));
@@ -615,13 +616,41 @@
             });
 
             for (const [dateStr, photosOfDate] of Object.entries(groups)) {
+                const isHidden = hiddenDates.has(dateStr);
+
+                // Gestionar visibilidad de los marcadores en el mapa para este grupo
+                photosOfDate.forEach(photo => {
+                    if (photo.marker) {
+                        if (isHidden) {
+                            if (markersGroup.hasLayer(photo.marker)) {
+                                markersGroup.removeLayer(photo.marker);
+                            }
+                        } else {
+                            if (!markersGroup.hasLayer(photo.marker)) {
+                                markersGroup.addLayer(photo.marker);
+                            }
+                        }
+                    }
+                });
+
+                // Cabecera del grupo de fecha con botón de visibilidad
                 const dateHeader = document.createElement('div');
-                dateHeader.className = 'px-3 py-1.5 bg-slate-100 text-slate-600 font-bold text-[11px] uppercase tracking-wider flex items-center justify-between border-y border-slate-200 mt-2 first:mt-0';
+                dateHeader.className = `px-3 py-1.5 bg-slate-100 text-slate-600 font-bold text-[11px] uppercase tracking-wider flex items-center justify-between border-y border-slate-200 mt-2 first:mt-0 transition ${isHidden ? 'opacity-50 bg-slate-200' : ''}`;
                 dateHeader.innerHTML = `
-                    <span><i class="fa-regular fa-calendar-days mr-1.5 text-brand-600"></i>${dateStr}</span>
-                    <span class="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full text-[10px]">${photosOfDate.length}</span>
+                    <span class="flex items-center gap-1.5">
+                        <i class="fa-regular fa-calendar-days text-brand-600"></i>
+                        <span>${dateStr}</span>
+                        <span class="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full text-[10px] ml-1">${photosOfDate.length}</span>
+                    </span>
+                    <button onclick="toggleDateVisibility('${dateStr}')" class="px-2 py-0.5 text-xs rounded hover:bg-slate-300 transition text-slate-600 flex items-center gap-1" title="${isHidden ? 'Mostrar este día' : 'Ocultar este día'}">
+                        <i class="fa-solid ${isHidden ? 'fa-eye-slash text-red-500' : 'fa-eye text-brand-600'}"></i>
+                        <span class="text-[10px] normal-case font-normal">${isHidden ? 'Oculto' : 'Visible'}</span>
+                    </button>
                 `;
                 itemsContainer.appendChild(dateHeader);
+
+                // Si el grupo está oculto, no renderizamos las tarjetas individuales
+                if (isHidden) continue;
 
                 photosOfDate.forEach(photo => {
                     const card = document.createElement('div');
@@ -656,7 +685,17 @@
                     itemsContainer.appendChild(card);
                 });
             }
-        } // <--- LLAVE DE CIERRE CORREGIDA Y AÑADIDA AQUÍ
+        }
+
+        // --- NUEVA FUNCIÓN: Alternar visibilidad de un grupo de fecha ---
+        function toggleDateVisibility(dateStr) {
+            if (hiddenDates.has(dateStr)) {
+                hiddenDates.delete(dateStr);
+            } else {
+                hiddenDates.add(dateStr);
+            }
+            updateUI();
+        }
 
         // --- RESALTAR ITEM ---
         function highlightItem(id, isHighlight) {
