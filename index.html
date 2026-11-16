@@ -135,6 +135,13 @@
                 <input type="text" id="search-input" placeholder="Buscar..." 
                        class="w-full pl-8 pr-2 py-1.5 text-xs bg-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 transition">
             </div>
+            <!-- Nuevo selector de ordenación -->
+            <select id="sort-select" title="Ordenar fotografías" class="bg-slate-100 border border-slate-200 text-slate-700 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 transition">
+                <option value="name-asc">Nombre (A-Z)</option>
+                <option value="name-desc">Nombre (Z-A)</option>
+                <option value="date-desc">Más recientes</option>
+                <option value="date-asc">Más antiguas</option>
+            </select>
             <button id="btn-export-geojson" title="Exportar GeoJSON" disabled
                     class="px-2 py-1.5 bg-slate-100 hover:bg-brand-500 hover:text-white text-slate-600 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1">
                 <i class="fa-solid fa-download"></i> GeoJSON
@@ -363,23 +370,38 @@
         });
 
         // --- PROCESAMIENTO DE ARCHIVOS (Omitir duplicados) ---
+        // --- FUNCIÓN AUXILIAR PARA EXTRAER TIMESTAMP ---
+        function getFileTimestamp(filename, exifDateOriginal) {
+            if (exifDateOriginal) {
+                const t = new Date(exifDateOriginal).getTime();
+                if (!isNaN(t)) return t;
+            }
+            const match = filename.match(/(\d{4})(\d{2})(\d{2})[_\-](\d{2})(\d{2})(\d{2})/);
+            if (match) {
+                const t = new Date(match[1], match[2]-1, match[3], match[4], match[5], match[6]).getTime();
+                if (!isNaN(t)) return t;
+            }
+            return 0;
+        }
+
+        // --- PROCESAMIENTO DE ARCHIVOS (Con control de duplicados y GPS) ---
         async function processFiles(files) {
-            statusText.innerText = 'Procesando imágenes...';
+            statusText.innerText = 'Escaneando y filtrando imágenes...';
             let addedCount = 0;
             let skippedCount = 0;
+            let noGpsCount = 0;
 
             for (let file of files) {
+                // Filtrar solo extensiones JPG / JPEG
                 if (!file.type.match('image/jpeg') && !file.name.match(/\.(jpg|jpeg)$/i)) continue;
 
+                // OMITIR DUPLICADOS: Si ya existe una foto con el mismo nombre, se salta
                 if (photosData.some(p => p.name === file.name)) {
                     skippedCount++;
                     continue;
                 }
 
-                const photoId = 'photo_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-                const objectURL = URL.createObjectURL(file);
-
-                let lat = null, lon = null, fechaStr = "Desconocida", azimuth = null;
+                let lat = null, lon = null, fechaStr = "Desconocida", azimuth = null, timestamp = 0;
 
                 try {
                     const gps = await exifr.gps(file);
@@ -390,10 +412,12 @@
 
                     const exifData = await exifr.parse(file, ['DateTimeOriginal', 'GPSImgDirection']);
                     if (exifData && exifData.DateTimeOriginal) {
-                        fechaStr = new Date(exifData.DateTimeOriginal).toLocaleString('es-ES');
+                        fechaStr = new Date(exifData.DateTimeOriginal).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
                     } else {
                         fechaStr = parseDateFromFilename(file.name);
                     }
+
+                    timestamp = getFileTimestamp(file.name, exifData?.DateTimeOriginal);
 
                     if (exifData && exifData.GPSImgDirection !== undefined) {
                         azimuth = parseFloat(exifData.GPSImgDirection);
@@ -401,31 +425,42 @@
                 } catch (err) {
                     console.warn(`Error leyendo EXIF en ${file.name}:`, err);
                     fechaStr = parseDateFromFilename(file.name);
+                    timestamp = getFileTimestamp(file.name, null);
                 }
 
+                // FILTRO ESTRICTO: Si no tiene GPS, se descarta
+                if (lat === null || lon === null) {
+                    noGpsCount++;
+                    continue;
+                }
+
+                const objectURL = URL.createObjectURL(file);
                 const photoObj = {
-                    id: photoId,
+                    id: 'photo_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
                     name: file.name,
                     url: objectURL,
                     lat: lat,
                     lon: lon,
                     azimuth: azimuth,
                     date: fechaStr,
-                    hasGps: lat !== null && lon !== null,
+                    timestamp: timestamp,
+                    hasGps: true,
                     marker: null
                 };
 
-                if (photoObj.hasGps) {
-                    const marker = createCustomMarker(photoObj);
-                    photoObj.marker = marker;
-                    markersGroup.addLayer(marker);
-                }
+                const marker = createCustomMarker(photoObj);
+                photoObj.marker = marker;
+                markersGroup.addLayer(marker);
 
                 photosData.push(photoObj);
                 addedCount++;
             }
 
-            statusText.innerText = `Cargadas ${addedCount} fotos${skippedCount > 0 ? ` (${skippedCount} omitidas)` : ''}`;
+            let msg = `Cargadas ${addedCount} fotos`;
+            if (skippedCount > 0) msg += ` (${skippedCount} duplicadas omitidas)`;
+            if (noGpsCount > 0) msg += ` (${noGpsCount} sin GPS omitidas)`;
+            statusText.innerText = msg;
+            
             updateUI();
 
             if (markersGroup.getLayers().length > 0) {
@@ -534,10 +569,25 @@
             return marker;
         }
 
-        // --- ACTUALIZAR UI ---
+        // --- ACTUALIZAR UI (Con agrupación visual por fechas y ordenación) ---
         function updateUI() {
             const query = searchInput.value.toLowerCase();
-            const filteredPhotos = photosData.filter(p => p.name.toLowerCase().includes(query) || p.date.toLowerCase().includes(query));
+            let filteredPhotos = photosData.filter(p => p.name.toLowerCase().includes(query) || p.date.toLowerCase().includes(query));
+
+            // Aplicar ordenación seleccionada
+            const sortBy = document.getElementById('sort-select').value;
+            filteredPhotos.sort((a, b) => {
+                if (sortBy === 'name-asc') {
+                    return a.name.localeCompare(b.name, 'es', { numeric: true });
+                } else if (sortBy === 'name-desc') {
+                    return b.name.localeCompare(a.name, 'es', { numeric: true });
+                } else if (sortBy === 'date-desc') {
+                    return b.timestamp - a.timestamp;
+                } else if (sortBy === 'date-asc') {
+                    return a.timestamp - b.timestamp;
+                }
+                return 0;
+            });
 
             itemsContainer.innerHTML = '';
 
@@ -560,43 +610,59 @@
             counterBadge.innerText = `${photosData.length} fotos`;
             gpsStats.innerText = `${gpsCount} con GPS`;
 
+            // Agrupar las fotos filtradas por fecha
+            const groups = {};
             filteredPhotos.forEach(photo => {
-                const card = document.createElement('div');
-                card.id = `card-${photo.id}`;
-                card.className = `item-card p-2 bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow flex gap-3 items-center cursor-pointer relative overflow-hidden`;
+                const dateKey = photo.date || "Fecha desconocida";
+                if (!groups[dateKey]) groups[dateKey] = [];
+                groups[dateKey].push(photo);
+            });
 
-                card.innerHTML = `
-                    <img src="${photo.url}" class="w-14 h-14 object-cover rounded-md flex-shrink-0 bg-slate-200 cursor-pointer" onclick="openLightboxById('${photo.id}')">
-                    <div class="flex-1 min-w-0">
-                        <p class="font-semibold text-xs text-slate-800 truncate">${photo.name}</p>
-                        <p class="text-[10px] text-slate-500 mt-0.5"><i class="fa-regular fa-clock mr-1"></i>${photo.date}</p>
-                        ${photo.hasGps 
-                            ? `<p class="text-[10px] text-brand-600 font-medium mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>${photo.lat.toFixed(4)}, ${photo.lon.toFixed(4)}</p>` 
-                            : `<p class="text-[10px] text-red-400 font-medium mt-0.5"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Sin datos GPS</p>`}
-                    </div>
-                    <div class="flex items-center gap-1">
-                        ${photo.hasGps ? `
+            // Renderizar por grupos de fecha
+            for (const [dateStr, photosOfDate] of Object.entries(groups)) {
+                // Cabecera del grupo de fecha
+                const dateHeader = document.createElement('div');
+                dateHeader.className = 'px-3 py-1.5 bg-slate-100 text-slate-600 font-bold text-[11px] uppercase tracking-wider flex items-center justify-between border-y border-slate-200 mt-2 first:mt-0';
+                dateHeader.innerHTML = `
+                    <span><i class="fa-regular fa-calendar-days mr-1.5 text-brand-600"></i>${dateStr}</span>
+                    <span class="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full text-[10px]">${photosOfDate.length}</span>
+                `;
+                itemsContainer.appendChild(dateHeader);
+
+                // Tarjetas de fotos de esta fecha
+                photosOfDate.forEach(photo => {
+                    const card = document.createElement('div');
+                    card.id = `card-${photo.id}`;
+                    card.className = `item-card p-2 bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow flex gap-3 items-center cursor-pointer relative overflow-hidden my-1`;
+
+                    card.innerHTML = `
+                        <img src="${photo.url}" class="w-14 h-14 object-cover rounded-md flex-shrink-0 bg-slate-200 cursor-pointer" onclick="openLightboxById('${photo.id}')">
+                        <div class="flex-1 min-w-0">
+                            <p class="font-semibold text-xs text-slate-800 truncate">${photo.name}</p>
+                            <p class="text-[10px] text-slate-500 mt-0.5"><i class="fa-regular fa-clock mr-1"></i>${photo.date}</p>
+                            <p class="text-[10px] text-brand-600 font-medium mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>${photo.lat.toFixed(4)}, ${photo.lon.toFixed(4)}</p>
+                        </div>
+                        <div class="flex items-center gap-1">
                             <button class="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition" title="Centrar en mapa y hacer zoom" onclick="event.stopPropagation(); focusPhoto('${photo.id}', true)">
                                 <i class="fa-solid fa-crosshairs text-xs"></i>
                             </button>
-                        ` : ''}
-                        <button class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition" title="Eliminar fotografía" onclick="event.stopPropagation(); deletePhoto('${photo.id}')">
-                            <i class="fa-solid fa-trash-can text-xs"></i>
-                        </button>
-                    </div>
-                `;
+                            <button class="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition" title="Eliminar fotografía" onclick="event.stopPropagation(); deletePhoto('${photo.id}')">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    `;
 
-                card.addEventListener('mouseenter', () => highlightItem(photo.id, true));
-                card.addEventListener('mouseleave', () => highlightItem(photo.id, false));
-                card.addEventListener('click', (e) => {
-                    if (!e.target.closest('button') && !e.target.closest('img')) {
-                        focusPhoto(photo.id, true);
-                    }
+                    card.addEventListener('mouseenter', () => highlightItem(photo.id, true));
+                    card.addEventListener('mouseleave', () => highlightItem(photo.id, false));
+                    card.addEventListener('click', (e) => {
+                        if (!e.target.closest('button') && !e.target.closest('img')) {
+                            focusPhoto(photo.id, true);
+                        }
+                    });
+
+                    itemsContainer.appendChild(card);
                 });
-
-                itemsContainer.appendChild(card);
-            });
-        }
+            }
 
         function highlightItem(id, isHighlight) {
             const photo = photosData.find(p => p.id === id);
