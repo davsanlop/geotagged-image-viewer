@@ -689,7 +689,7 @@
             URL.revokeObjectURL(url);
         });
 
-        // --- EXPORTAR A DXF (AutoCAD) con Geometría Paramétrica Exacta ---
+        // --- EXPORTAR A DXF (AutoCAD) ---
         btnExportDXF.addEventListener('click', () => {
             const validPhotos = photosData.filter(p => p.hasGps);
             if (validPhotos.length === 0) return;
@@ -714,47 +714,69 @@
                 const authorPart = parts[0].toUpperCase();
                 const photoNum = parts.length > 1 ? parts.slice(1).join('_') : baseName.slice(-2);
 
-                // Azimut en radianes (Topografía: 0 = Norte, 90 = Este)
+                // Azimut topográfico (0° = Norte, 90° = Este)
                 const azimuth = (photo.azimuth !== null && !isNaN(photo.azimuth)) ? photo.azimuth : 0;
                 const azRad = azimuth * Math.PI / 180;
 
-                // Vectores de orientación: Norte = +Y, Este = +X
+                // Vector dirección azimut (Norte = +Y, Este = +X)
                 const ux = Math.sin(azRad);
                 const uy = Math.cos(azRad);
-                const px = -uy; // Perpendicular izquierda
+                // Vector perpendicular (Línea diametral / Ecuador del símbolo)
+                const px = -uy;
                 const py = ux;
 
-                const R = 0.375; // Radio exacto del bloque original de BricsCAD
+                const R = 1.5; // Radio del círculo
                 const layer = "0_FOTO_CAMARA";
-                const colorRed = "62\n1"; // ACI 1 = Rojo
+                const colorRed = "62\n1"; // Rojo ACI 1
 
-                // 1. Círculo principal
-                dxf.push(`0\nCIRCLE\n8\n${layer}\n${colorRed}\n10\n${xUtm.toFixed(4)}\n20\n${yUtm.toFixed(4)}\n30\n0.0\n40\n${R}`);
+                // 1. Círculo principal (transparente por dentro)
+                dxf.push(`0\nCIRCLE\n8\n${layer}\n${colorRed}\n10\n${xUtm.toFixed(4)}\n20\n${yUtm.toFixed(4)}\n30\n0.0\n40\n${R.toFixed(4)}`);
 
-                // 2. Línea diametral (perpendicular al azimut)
-                const p1x = xUtm + R * px;
-                const p1y = yUtm + R * py;
-                const p2x = xUtm - R * px;
-                const p2y = yUtm - R * py;
+                // 2. Línea diametral (ecuador que divide los hemisferios)
+                // Se extiende ligeramente por los lados (factor 1.15) para marcar los extremos de la base del triángulo
+                const ext = 1.15;
+                const p1x = xUtm + (R * ext) * px;
+                const p1y = yUtm + (R * ext) * py;
+                const p2x = xUtm - (R * ext) * px;
+                const p2y = yUtm - (R * ext) * py;
                 dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${p1x.toFixed(4)}\n20\n${p1y.toFixed(4)}\n30\n0.0\n11\n${p2x.toFixed(4)}\n21\n${p2y.toFixed(4)}\n31\n0.0`);
 
-                // 3. Triángulo sólido de azimut (SOLID) con base en la línea diametral y ápice hacia el azimut
-                const apexX = xUtm + (R * 1.5) * ux;
-                const apexY = yUtm + (R * 1.5) * uy;
-                dxf.push(`0\nSOLID\n8\n${layer}\n${colorRed}\n10\n${apexX.toFixed(4)}\n20\n${apexY.toFixed(4)}\n30\n0.0\n11\n${p1x.toFixed(4)}\n21\n${p1y.toFixed(4)}\n31\n0.0\n12\n${p2x.toFixed(4)}\n22\n${p2y.toFixed(4)}\n32\n0.0\n13\n${p2x.toFixed(4)}\n23\n${p2y.toFixed(4)}\n33\n0.0`);
+                // 3. Contorno del triángulo de azimut (Líneas para mantener el interior del círculo totalmente hueco)
+                const apexX = xUtm + (R * 2.1) * ux;
+                const apexY = yUtm + (R * 2.1) * uy;
 
-                // Ángulo de rotación de los textos para AutoCAD
-                const textRotDeg = 90 - azimuth;
+                // Línea izquierda del triángulo
+                dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${p2x.toFixed(4)}\n20\n${p2y.toFixed(4)}\n30\n0.0\n11\n${apexX.toFixed(4)}\n21\n${apexY.toFixed(4)}\n31\n0.0`);
+                // Línea derecha del triángulo
+                dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${apexX.toFixed(4)}\n20\n${apexY.toFixed(4)}\n30\n0.0\n11\n${p1x.toFixed(4)}\n21\n${p1y.toFixed(4)}\n31\n0.0`);
 
-                // 4. Texto Superior (Número de foto)
-                const topTextX = xUtm + (0.45 * R) * ux;
-                const topTextY = yUtm + (0.45 * R) * uy;
-                dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${topTextX.toFixed(4)}\n20\n${topTextY.toFixed(4)}\n30\n0.0\n40\n0.09375\n1\n${photoNum}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${topTextX.toFixed(4)}\n21\n${topTextY.toFixed(4)}\n31\n0.0\n73\n2`);
+                // Relleno sólido exclusivamente en la punta exterior (fuera del círculo) para mantener el aspecto visual potente
+                const tipBaseX = xUtm + R * ux;
+                const tipBaseY = yUtm + R * uy;
+                const wingLeftX = xUtm + 0.35 * R * px + 1.3 * R * ux;
+                const wingLeftY = yUtm + 0.35 * R * py + 1.3 * R * uy;
+                const wingRightX = xUtm - 0.35 * R * px + 1.3 * R * ux;
+                const wingRightY = yUtm - 0.35 * R * py + 1.3 * R * uy;
+                
+                dxf.push(`0\nSOLID\n8\n${layer}\n${colorRed}\n10\n${apexX.toFixed(4)}\n20\n${apexY.toFixed(4)}\n30\n0.0\n11\n${wingLeftX.toFixed(4)}\n21\n${wingLeftY.toFixed(4)}\n31\n0.0\n12\n${wingRightX.toFixed(4)}\n22\n${wingRightY.toFixed(4)}\n32\n0.0\n13\n${wingRightX.toFixed(4)}\n23\n${wingRightY.toFixed(4)}\n33\n0.0`);
 
-                // 5. Texto Inferior (Autor: DAVID / JC)
-                const botTextX = xUtm - (0.45 * R) * ux;
-                const botTextY = yUtm - (0.45 * R) * uy;
-                dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${botTextX.toFixed(4)}\n20\n${botTextY.toFixed(4)}\n30\n0.0\n40\n0.07875\n1\n${authorPart}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${botTextX.toFixed(4)}\n21\n${botTextY.toFixed(4)}\n31\n0.0\n73\n2`);
+                // 4. Orientación de los textos paralelos a la línea diametral (con normalización para que no queden invertidos)
+                let textRotDeg = Math.atan2(py, px) * 180 / Math.PI;
+                if (textRotDeg > 90) textRotDeg -= 180;
+                if (textRotDeg < -90) textRotDeg += 180;
+
+                const textHeight = 0.32;
+
+                // Texto Superior (Número de foto en el hemisferio superior)
+                const topTextX = xUtm + (0.5 * R) * ux;
+                const topTextY = yUtm + (0.5 * R) * uy;
+                dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${topTextX.toFixed(4)}\n20\n${topTextY.toFixed(4)}\n30\n0.0\n40\n${textHeight}\n1\n${photoNum}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${topTextX.toFixed(4)}\n21\n${topTextY.toFixed(4)}\n31\n0.0\n73\n2`);
+
+                // Texto Inferior (Autor en el hemisferio inferior)
+                const botTextX = xUtm - (0.5 * R) * ux;
+                const botTextY = yUtm - (0.5 * R) * uy;
+                const botTextHeight = authorPart.length > 4 ? 0.25 : textHeight;
+                dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${botTextX.toFixed(4)}\n20\n${botTextY.toFixed(4)}\n30\n0.0\n40\n${botTextHeight}\n1\n${authorPart}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${botTextX.toFixed(4)}\n21\n${botTextY.toFixed(4)}\n31\n0.0\n73\n2`);
             });
 
             dxf.push("0\nENDSEC\n0\nEOF");
