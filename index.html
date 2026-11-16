@@ -689,7 +689,7 @@
             URL.revokeObjectURL(url);
         });
 
-        // --- EXPORTAR A DXF (AutoCAD) ---
+        // --- EXPORTAR A DXF (AutoCAD) con el Bloque BricsCAD Personalizado ---
         btnExportDXF.addEventListener('click', () => {
             const validPhotos = photosData.filter(p => p.hasGps);
             if (validPhotos.length === 0) return;
@@ -705,6 +705,10 @@
             dxf.push("0\nSECTION\n2\nBLOCKS\n0\nENDSEC");
             dxf.push("0\nSECTION\n2\nENTITIES");
 
+            // Centro local del bloque exportado de BricsCAD
+            const Cx = 0.546634;
+            const Cy = -0.000440;
+
             validPhotos.forEach(photo => {
                 const [xUtm, yUtm] = proj4('WGS84', utmProjStr, [photo.lon, photo.lat]);
 
@@ -714,55 +718,67 @@
                 const authorPart = parts[0].toUpperCase();
                 const photoNum = parts.length > 1 ? parts.slice(1).join('_') : baseName.slice(-2);
 
-                // Ángulo en radianes para AutoCAD (0° = Este, sentido antihorario)
+                // Ángulo en radianes para AutoCAD (Azimut)
                 const azimuth = (photo.azimuth !== null && !isNaN(photo.azimuth)) ? photo.azimuth : 0;
                 const theta = ((90 - azimuth) * Math.PI) / 180;
-                const ux = Math.cos(theta); // Vector dirección azimut
-                const uy = Math.sin(theta);
-                const px = -uy;             // Vector perpendicular izquierda
-                const py = ux;
+                const cosT = Math.cos(theta);
+                const sinT = Math.sin(theta);
 
-                // Radio base del símbolo en metros
-                const R = 1.5;
+                // Función auxiliar para transformar puntos locales del bloque a coordenadas globales UTM
+                function tPt(lx, ly) {
+                    const rx = lx - Cx;
+                    const ry = ly - Cy;
+                    const gx = xUtm + (rx * cosT - ry * sinT);
+                    const gy = yUtm + (rx * sinT + ry * cosT);
+                    return [gx, gy];
+                }
+
+                // Rotación base de los textos en radianes dentro del bloque
+                const baseTextRotRad = 359.962856828467 * Math.PI / 180;
+                const textRotDeg = ((baseTextRotRad + theta) * 180) / Math.PI;
+
                 const layer = "0_FOTO_CAMARA";
                 const colorRed = "62\n1"; // ACI 1 = Rojo
 
-                // 1. CÍRCULO PRINCIPAL (Perímetro transparente por dentro)
-                dxf.push(`0\nCIRCLE\n8\n${layer}\n${colorRed}\n10\n${xUtm.toFixed(3)}\n20\n${yUtm.toFixed(3)}\n30\n0.0\n40\n${R.toFixed(3)}`);
+                // 1. TEXTO SUPERIOR (Número de foto)
+                const [t1x, t1y] = tPt(0.468834179396, 0.121425296952);
+                const [a1x, a1y] = tPt(0.546989621551, 0.168249683433);
+                dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${t1x.toFixed(6)}\n20\n${t1y.toFixed(6)}\n30\n0.0\n40\n0.093750085032\n1\n${photoNum}\n50\n${textRotDeg.toFixed(4)}\n72\n1\n11\n${a1x.toFixed(6)}\n21\n${a1y.toFixed(6)}\n31\n0.0\n73\n2`);
 
-                // 2. LÍNEA DIAMETRAL / BASE DEL TRIÁNGULO (Se extiende ligeramente para que las esquinas sobresalgan)
-                const baseScale = 1.12;
-                const bLeftX = xUtm + (R * baseScale) * (-px);
-                const bLeftY = yUtm + (R * baseScale) * (-py);
-                const bRightX = xUtm + (R * baseScale) * px;
-                const bRightY = yUtm + (R * baseScale) * py;
+                // 2. TEXTO INFERIOR (Autor)
+                const [t2x, t2y] = tPt(0.362782747622, -0.208603092954);
+                const [a2x, a2y] = tPt(0.546558401352, -0.169347185344);
+                dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${t2x.toFixed(6)}\n20\n${t2y.toFixed(6)}\n30\n0.0\n40\n0.078750071427\n1\n${authorPart}\n50\n${textRotDeg.toFixed(4)}\n72\n1\n11\n${a2x.toFixed(6)}\n21\n${a2y.toFixed(6)}\n31\n0.0\n73\n2`);
 
-                dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${bLeftX.toFixed(3)}\n20\n${bLeftY.toFixed(3)}\n30\n0.0\n11\n${bRightX.toFixed(3)}\n21\n${bRightY.toFixed(3)}\n31\n0.0`);
+                // 3. CÍRCULO PRINCIPAL
+                const [cx, cy] = tPt(0.546634004211, -0.000440825147);
+                dxf.push(`0\nCIRCLE\n8\n${layer}\n${colorRed}\n10\n${cx.toFixed(6)}\n20\n${cy.toFixed(6)}\n30\n0.0\n40\n0.375000340118`);
 
-                // 3. CONTORNO DEL TRIÁNGULO DE AZIMUT (Sin relleno, totalmente hueco)
-                const apexX = xUtm + (R * 1.8) * ux;
-                const apexY = yUtm + (R * 1.8) * uy;
+                // 4. LÍNEA DIAMETRAL
+                const [lx1, ly1] = tPt(0.921634198636, -0.000771443761);
+                const [lx2, ly2] = tPt(0.171633809897, -0.000110206183);
+                dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${lx1.toFixed(6)}\n20\n${ly1.toFixed(6)}\n30\n0.0\n11\n${lx2.toFixed(6)}\n21\n${ly2.toFixed(6)}\n31\n0.0`);
 
-                // Línea izquierda del triángulo (desde la esquina base izquierda hasta el ápice)
-                dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${bLeftX.toFixed(3)}\n20\n${bLeftY.toFixed(3)}\n30\n0.0\n11\n${apexX.toFixed(3)}\n21\n${apexY.toFixed(3)}\n31\n0.0`);
-
-                // Línea derecha del triángulo (desde el ápice hasta la esquina base derecha)
-                dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${apexX.toFixed(3)}\n20\n${apexY.toFixed(3)}\n30\n0.0\n11\n${bRightX.toFixed(3)}\n21\n${bRightY.toFixed(3)}\n31\n0.0`);
-
-                // 4. TEXTOS INTERIORES
-                const textRotDeg = ((theta - Math.PI / 2) * 180) / Math.PI;
-                const textHeight = 0.25 * R;
-
-                // Mitad superior: Número de foto (a partir de la barra baja)
-                const topTextX = xUtm + (0.45 * R) * ux;
-                const topTextY = yUtm + (0.45 * R) * uy;
-                dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${topTextX.toFixed(3)}\n20\n${topTextY.toFixed(3)}\n30\n0.0\n40\n${textHeight.toFixed(3)}\n1\n${photoNum}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${topTextX.toFixed(3)}\n21\n${topTextY.toFixed(3)}\n31\n0.0\n73\n2`);
-
-                // Mitad inferior: Autor (DAVID / JC)
-                const botTextX = xUtm - (0.45 * R) * ux;
-                const botTextY = yUtm - (0.45 * R) * uy;
-                const authorTextHeight = authorPart.length > 3 ? (0.21 * R) : (0.25 * R);
-                dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${botTextX.toFixed(3)}\n20\n${botTextY.toFixed(3)}\n30\n0.0\n40\n${authorTextHeight.toFixed(3)}\n1\n${authorPart}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${botTextX.toFixed(3)}\n21\n${botTextY.toFixed(3)}\n31\n0.0\n73\n2`);
+                // 5. HATCH (Triángulo Sólido de Azimut)
+                const hVerts = [
+                    [0.265602542069, 0.247846453014],
+                    [0.171633809706, -0.000110206268],
+                    [0.046633744886, 0.000000000000],
+                    [0.265602542047, 0.247846453033],
+                    [0.547133852571, 0.566506178325],
+                    [0.828102833579, 0.247350524882],
+                    [1.046634263293, -0.000881650099],
+                    [0.921634198474, -0.000771443839],
+                    [0.828102833598, 0.247350524898]
+                ];
+                
+                const gVerts = hVerts.map(v => tPt(v[0], v[1]));
+                
+                dxf.push(`0\nHATCH\n8\n${layer}\n${colorRed}\n10\n0.0\n20\n0.0\n30\n0.0\n210\n0.0\n220\n0.0\n230\n1.0\n2\nSOLID\n70\n1\n71\n1\n91\n1\n92\n3\n72\n1\n73\n1\n93\n${gVerts.length}`);
+                gVerts.forEach(gv => {
+                    dxf.push(`10\n${gv[0].toFixed(6)}\n20\n${gv[1].toFixed(6)}\n42\n0.0`);
+                });
+                dxf.push(`97\n1\n75\n0\n76\n1\n98\n1\n10\n0.0\n20\n0.0`);
             });
 
             dxf.push("0\nENDSEC\n0\nEOF");
