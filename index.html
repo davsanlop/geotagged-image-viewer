@@ -38,14 +38,12 @@
     <script src="https://cdn.jsdelivr.net/npm/exifr/dist/full.umd.js"></script>
 
     <style>
-        /* Estilos personalizados del mapa y animaciones */
         #map {
             width: 100%;
             height: 100%;
             z-index: 1;
         }
 
-        /* Marcadores interactivos con Azimut limpio */
         .custom-marker {
             transition: all 0.25s ease;
         }
@@ -73,7 +71,6 @@
             z-index: 1000 !important;
         }
 
-        /* Scrollbar personalizado */
         ::-webkit-scrollbar {
             width: 6px;
         }
@@ -88,7 +85,6 @@
             background: #94a3b8;
         }
 
-        /* Animación suave para la lista */
         .item-card {
             transition: all 0.2s ease;
         }
@@ -102,7 +98,7 @@
 <body class="bg-slate-100 text-slate-800 font-sans h-screen flex flex-col md:flex-row overflow-hidden">
 
     <!-- PANEL LATERAL (SIDEBAR) -->
-    <aside class="w-full md:w-100 bg-white flex flex-col h-1/2 md:h-full border-r border-slate-200 shadow-xl z-20">
+    <aside class="w-full md:w-98 bg-white flex flex-col h-1/2 md:h-full border-r border-slate-200 shadow-xl z-20">
         
         <!-- Header Principal -->
         <div class="p-4 bg-brand-900 text-white flex items-center justify-between shadow-md">
@@ -123,7 +119,7 @@
             <div id="drop-zone" class="border-2 border-dashed border-brand-500 hover:border-brand-600 bg-brand-50/50 hover:bg-brand-50 transition-all rounded-xl p-4 text-center cursor-pointer group">
                 <input type="file" id="file-input" multiple accept="image/jpeg, image/jpg" webkitdirectory directory class="hidden">
                 <i class="fa-solid fa-cloud-arrow-up text-3xl text-brand-500 group-hover:scale-110 transition-transform mb-1"></i>
-                <p class="text-xs font-semibold text-slate-700">Arrastra fotos JPG/JPEG aquí</p>
+                <p class="text-xs font-semibold text-slate-700">Arrastra fotos o carpetas JPG aquí</p>
                 <p class="text-[10px] text-slate-500 mt-0.5">o haz clic para explorar en tu equipo</p>
             </div>
         </div>
@@ -135,7 +131,6 @@
                 <input type="text" id="search-input" placeholder="Buscar..." 
                        class="w-full pl-8 pr-2 py-1.5 text-xs bg-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 transition">
             </div>
-            <!-- Nuevo selector de ordenación -->
             <select id="sort-select" title="Ordenar fotografías" class="bg-slate-100 border border-slate-200 text-slate-700 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 transition">
                 <option value="name-asc">Nombre (A-Z)</option>
                 <option value="name-desc">Nombre (Z-A)</option>
@@ -158,7 +153,6 @@
 
         <!-- Lista de Fotografías Cargadas -->
         <div id="items-container" class="flex-1 overflow-y-auto p-3 space-y-2">
-            <!-- Estado inicial vacío -->
             <div id="empty-state" class="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
                 <i class="fa-regular fa-images text-4xl mb-3 text-slate-300"></i>
                 <p class="text-xs font-medium">No hay fotografías cargadas</p>
@@ -177,7 +171,6 @@
     <main class="flex-1 relative h-1/2 md:h-full">
         <div id="map"></div>
 
-        <!-- Botón Flotante para recentrar mapa -->
         <button id="btn-center-map" class="absolute bottom-5 right-5 z-[1000] bg-white text-slate-700 hover:text-brand-600 p-3 rounded-full shadow-lg border border-slate-200 transition hover:scale-105 active:scale-95 flex items-center justify-center">
             <i class="fa-solid fa-crosshairs text-lg"></i>
         </button>
@@ -185,14 +178,12 @@
 
     <!-- LIGHTBOX / VISOR A PANTALLA COMPLETA -->
     <div id="lightbox" class="fixed inset-0 bg-black/90 backdrop-blur-sm z-[2000] hidden flex-col justify-between p-4 transition-opacity duration-300 opacity-0">
-        <!-- Header Lightbox -->
         <div class="flex justify-between items-center text-white z-10">
             <div>
                 <h3 id="lightbox-title" class="font-bold text-sm sm:text-base truncate max-w-xs sm:max-w-md">Nombre de la Foto</h3>
                 <p id="lightbox-sub" class="text-xs text-slate-300">Fecha y coordenadas</p>
             </div>
             <div class="flex items-center gap-2">
-                <!-- Controles de Lupa / Zoom Lightbox -->
                 <div class="flex items-center bg-white/10 rounded-full px-2 py-1 gap-2 mr-2">
                     <button id="lb-zoom-out" title="Reducir Zoom" class="px-2 py-0.5 hover:bg-white/20 rounded text-sm transition"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
                     <span id="lb-zoom-level" class="text-xs font-mono w-10 text-center">100%</span>
@@ -205,12 +196,10 @@
             </div>
         </div>
 
-        <!-- Imagen principal con soporte de zoom y arrastre -->
         <div id="lightbox-container" class="flex-1 flex items-center justify-center overflow-hidden my-2 relative cursor-grab active:cursor-grabbing">
             <img id="lightbox-img" src="" alt="Previsualización" class="max-h-[85vh] max-w-[90vw] object-contain rounded-lg shadow-2xl transition-transform duration-100 origin-center select-none">
         </div>
 
-        <!-- Footer Lightbox -->
         <div class="text-center text-xs text-slate-400 py-1">
             <span id="lightbox-index">1 / 1</span>
         </div>
@@ -223,17 +212,15 @@
         // --- ESTADO GLOBAL DE LA APLICACIÓN ---
         let photosData = []; 
         let markersGroup = L.featureGroup(); 
-        let activePhotoId = null;
         let currentLightboxIndex = 0;
 
-        // Variables de Zoom para Lightbox
         let lbScale = 1;
         let lbPosX = 0;
         let lbPosY = 0;
         let isDragging = false;
         let startX = 0, startY = 0;
 
-        // --- INICIALIZACIÓN DE CAPAS Y MAPA (Hasta Zoom 22) ---
+        // --- INICIALIZACIÓN DE MAPA ---
         const topoLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 22,
             maxNativeZoom: 19,
@@ -262,11 +249,11 @@
 
         markersGroup.addTo(map);
 
-        // --- ELEMENTOS DEL DOM ---
-        // --- 1. REFERENCIAS AL DOM (Asegurando que no sean null) ---
-        const dropZone = document.getElementById('drop-zone') || document.getElementById('dropZone');
-        const fileInput = document.getElementById('file-input') || document.getElementById('fileInput');
+        // --- REFERENCIAS AL DOM ---
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
         const searchInput = document.getElementById('search-input');
+        const sortSelect = document.getElementById('sort-select');
         const itemsContainer = document.getElementById('items-container');
         const statusText = document.getElementById('status-text');
         const counterBadge = document.getElementById('counter-badge');
@@ -275,56 +262,7 @@
         const btnExportGeoJSON = document.getElementById('btn-export-geojson');
         const btnExportDXF = document.getElementById('btn-export-dxf');
         const btnReset = document.getElementById('btn-reset');
-
-        // --- 2. CONFIGURACIÓN DE EVENTOS DE CARGA (DRAG & DROP Y CLIC) ---
-        if (dropZone && fileInput) {
-            // Al hacer clic en la zona de carga, se abre el explorador de archivos
-            dropZone.addEventListener('click', () => {
-                fileInput.click();
-            });
-
-            // Evitar comportamiento por defecto al arrastrar sobre la zona
-            ['dragenter', 'dragover'].forEach(eventName => {
-                dropZone.addEventListener(eventName, (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    dropZone.classList.add('bg-brand-50', 'border-brand-500');
-                }, false);
-            });
-
-            ['dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    dropZone.classList.remove('bg-brand-50', 'border-brand-500');
-                }, false);
-            });
-
-            // Manejar el evento de soltar carpetas/archivos (Drop)
-            dropZone.addEventListener('drop', async (e) => {
-                const items = e.dataTransfer.items;
-                if (items && items.length > 0) {
-                    if (statusText) statusText.innerText = 'Escaneando carpetas y archivos...';
-                    const extractedFiles = await getFilesFromDataTransferItems(items);
-                    if (extractedFiles.length > 0) {
-                        processFiles(extractedFiles);
-                    } else {
-                        if (statusText) statusText.innerText = 'No se encontraron archivos compatibles';
-                    }
-                } else if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                    processFiles(e.dataTransfer.files);
-                }
-            });
-
-            // Manejar la selección manual mediante el explorador de archivos
-            fileInput.addEventListener('change', (e) => {
-                if (e.target.files && e.target.files.length > 0) {
-                    processFiles(e.target.files);
-                    // Limpiar el valor para permitir volver a cargar el mismo directorio si es necesario
-                    fileInput.value = '';
-                }
-            });
-        }
+        const btnCenterMap = document.getElementById('btn-center-map');
 
         // Lightbox DOM
         const lightbox = document.getElementById('lightbox');
@@ -341,7 +279,7 @@
         const lbZoomReset = document.getElementById('lb-zoom-reset');
         const lbZoomLevel = document.getElementById('lb-zoom-level');
 
-        // --- FUNCIÓN RECURSIVA PARA LEER CARPETAS Y ARCHIVOS ARRastrados ---
+        // --- LECTURA RECURSIVA DE CARPETAS Y ARCHIVOS ---
         async function getFilesFromDataTransferItems(items) {
             let files = [];
             let entries = [];
@@ -376,7 +314,7 @@
                                     for (let subEntry of results) {
                                         await traverseEntry(subEntry);
                                     }
-                                    readEntries(); // Continuar leyendo si hay más lotes
+                                    readEntries();
                                 }
                             }, () => resolve());
                         };
@@ -392,35 +330,50 @@
             return files;
         }
 
-        // --- GESTIÓN DE EVENTOS DE DRAG & DROP ACTUALIZADA ---
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('bg-brand-100'); });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('bg-brand-100'));
-        
-        dropZone.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('bg-brand-100');
+        // --- GESTIÓN DE EVENTOS DE CARGA (DRAG & DROP Y CLIC) ---
+        if (dropZone && fileInput) {
+            dropZone.addEventListener('click', () => fileInput.click());
 
-            const items = e.dataTransfer.items;
-            if (items && items.length > 0) {
-                statusText.innerText = 'Escaneando carpetas y archivos...';
-                const extractedFiles = await getFilesFromDataTransferItems(items);
-                if (extractedFiles.length > 0) {
-                    processFiles(extractedFiles);
-                } else {
-                    statusText.innerText = 'No se encontraron archivos compatibles';
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.add('bg-brand-50', 'border-brand-500');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.remove('bg-brand-50', 'border-brand-500');
+                }, false);
+            });
+
+            dropZone.addEventListener('drop', async (e) => {
+                const items = e.dataTransfer.items;
+                if (items && items.length > 0) {
+                    statusText.innerText = 'Escaneando carpetas y archivos...';
+                    const extractedFiles = await getFilesFromDataTransferItems(items);
+                    if (extractedFiles.length > 0) {
+                        processFiles(extractedFiles);
+                    } else {
+                        statusText.innerText = 'No se encontraron archivos compatibles';
+                    }
+                } else if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    processFiles(e.dataTransfer.files);
                 }
-            } else if (e.dataTransfer.files.length) {
-                processFiles(e.dataTransfer.files);
-            }
-        });
+            });
 
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length) processFiles(e.target.files);
-        });
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                    processFiles(e.target.files);
+                    fileInput.value = '';
+                }
+            });
+        }
 
-        // --- PROCESAMIENTO DE ARCHIVOS (Omitir duplicados) ---
-        // --- FUNCIÓN AUXILIAR PARA EXTRAER TIMESTAMP ---
+        // --- UTILIDADES DE FECHA ---
         function getFileTimestamp(filename, exifDateOriginal) {
             if (exifDateOriginal) {
                 const t = new Date(exifDateOriginal).getTime();
@@ -434,7 +387,15 @@
             return 0;
         }
 
-        // --- PROCESAMIENTO DE ARCHIVOS (Con control de duplicados y GPS) ---
+        function parseDateFromFilename(filename) {
+            const match = filename.match(/(\d{4})(\d{2})(\d{2})[_\-](\d{2})(\d{2})(\d{2})/);
+            if (match) {
+                return `${match[3]}/${match[2]}/${match[1]} ${match[4]}:${match[5]}:${match[6]}`;
+            }
+            return "Sin fecha EXIF";
+        }
+
+        // --- PROCESAMIENTO DE ARCHIVOS ---
         async function processFiles(files) {
             statusText.innerText = 'Escaneando y filtrando imágenes...';
             let addedCount = 0;
@@ -442,10 +403,8 @@
             let noGpsCount = 0;
 
             for (let file of files) {
-                // Filtrar solo extensiones JPG / JPEG
                 if (!file.type.match('image/jpeg') && !file.name.match(/\.(jpg|jpeg)$/i)) continue;
 
-                // OMITIR DUPLICADOS: Si ya existe una foto con el mismo nombre, se salta
                 if (photosData.some(p => p.name === file.name)) {
                     skippedCount++;
                     continue;
@@ -478,7 +437,6 @@
                     timestamp = getFileTimestamp(file.name, null);
                 }
 
-                // FILTRO ESTRICTO: Si no tiene GPS, se descarta
                 if (lat === null || lon === null) {
                     noGpsCount++;
                     continue;
@@ -518,22 +476,14 @@
             }
         }
 
-        function parseDateFromFilename(filename) {
-            const match = filename.match(/(\d{4})(\d{2})(\d{2})[_\-](\d{2})(\d{2})(\d{2})/);
-            if (match) {
-                return `${match[3]}/${match[2]}/${match[1]} ${match[4]}:${match[5]}:${match[6]}`;
-            }
-            return "Sin fecha EXIF";
-        }
-
-        // --- COPIAR COORDENADAS CON COLOR VERDE DINÁMICO ---
+        // --- COPIAR COORDENADAS ---
         function copyCoords(lat, lon, btnElement) {
             const text = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
             navigator.clipboard.writeText(text).then(() => {
                 const originalContent = btnElement.innerHTML;
                 const originalClass = btnElement.className;
 
-                btnElement.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i> <span class="text-emerald-700 font-bold">Coordenadas copiadas al portapapeles</span>`;
+                btnElement.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i> <span class="text-emerald-700 font-bold">Coordenadas copiadas</span>`;
                 btnElement.className = `w-full mt-1 px-2 py-1.5 bg-emerald-50 text-emerald-700 text-[11px] font-semibold rounded border border-emerald-300 transition flex items-center justify-center gap-1.5`;
 
                 setTimeout(() => {
@@ -543,7 +493,7 @@
             });
         }
 
-        // --- ELIMINAR FOTOGRAFÍA ESPECÍFICA ---
+        // --- ELIMINAR FOTOGRAFÍA ---
         function deletePhoto(id) {
             const index = photosData.findIndex(p => p.id === id);
             if (index === -1) return;
@@ -584,7 +534,6 @@
 
             const marker = L.marker([photo.lat, photo.lon], { icon: customIcon });
 
-            // Preview grande en Hover
             const tooltipContent = `
                 <div class="text-center p-1">
                     <img src="${photo.url}" class="w-64 h-auto max-h-48 object-contain rounded mb-1 shadow bg-black/5">
@@ -597,7 +546,6 @@
                 opacity: 0.95
             });
 
-            // Popup grande con imagen completa sin recortar
             const popupContent = `
                 <div class="p-2 text-slate-800 text-left min-w-[300px]">
                     <img src="${photo.url}" class="w-full h-auto max-h-64 object-contain rounded-lg shadow cursor-pointer mb-2 bg-black/5 hover:opacity-90 transition" onclick="openLightboxById('${photo.id}')">
@@ -619,13 +567,12 @@
             return marker;
         }
 
-        // --- ACTUALIZAR UI (Con agrupación visual por fechas y ordenación) ---
+        // --- ACTUALIZAR UI ---
         function updateUI() {
             const query = searchInput.value.toLowerCase();
             let filteredPhotos = photosData.filter(p => p.name.toLowerCase().includes(query) || p.date.toLowerCase().includes(query));
 
-            // Aplicar ordenación seleccionada
-            const sortBy = document.getElementById('sort-select').value;
+            const sortBy = sortSelect.value;
             filteredPhotos.sort((a, b) => {
                 if (sortBy === 'name-asc') {
                     return a.name.localeCompare(b.name, 'es', { numeric: true });
@@ -660,7 +607,6 @@
             counterBadge.innerText = `${photosData.length} fotos`;
             gpsStats.innerText = `${gpsCount} con GPS`;
 
-            // Agrupar las fotos filtradas por fecha
             const groups = {};
             filteredPhotos.forEach(photo => {
                 const dateKey = photo.date || "Fecha desconocida";
@@ -668,9 +614,7 @@
                 groups[dateKey].push(photo);
             });
 
-            // Renderizar por grupos de fecha
             for (const [dateStr, photosOfDate] of Object.entries(groups)) {
-                // Cabecera del grupo de fecha
                 const dateHeader = document.createElement('div');
                 dateHeader.className = 'px-3 py-1.5 bg-slate-100 text-slate-600 font-bold text-[11px] uppercase tracking-wider flex items-center justify-between border-y border-slate-200 mt-2 first:mt-0';
                 dateHeader.innerHTML = `
@@ -679,7 +623,6 @@
                 `;
                 itemsContainer.appendChild(dateHeader);
 
-                // Tarjetas de fotos de esta fecha
                 photosOfDate.forEach(photo => {
                     const card = document.createElement('div');
                     card.id = `card-${photo.id}`;
@@ -713,15 +656,30 @@
                     itemsContainer.appendChild(card);
                 });
             }
+        } // <--- LLAVE DE CIERRE CORREGIDA Y AÑADIDA AQUÍ
 
+        // --- RESALTAR ITEM ---
         function highlightItem(id, isHighlight) {
             const photo = photosData.find(p => p.id === id);
             if (!photo) return;
 
-            const card = document.getElementById(`card-${id}`);
+            let card = document.getElementById(`card-${id}`);
+
+            if (isHighlight && !card) {
+                if (searchInput.value.trim() !== '') {
+                    searchInput.value = '';
+                    updateUI();
+                    card = document.getElementById(`card-${id}`);
+                }
+            }
+
             if (card) {
-                if (isHighlight) card.classList.add('highlighted');
-                else card.classList.remove('highlighted');
+                if (isHighlight) {
+                    card.classList.add('highlighted');
+                    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                } else {
+                    card.classList.remove('highlighted');
+                }
             }
 
             if (photo.marker && photo.marker.getElement()) {
@@ -731,7 +689,7 @@
             }
         }
 
-        // --- ENFOCAR FOTO (Aproxima a Zoom 18 y despliega popup) ---
+        // --- ENFOCAR FOTO ---
         function focusPhoto(id, openPopup = true) {
             const photo = photosData.find(p => p.id === id);
             if (!photo || !photo.hasGps) return;
@@ -750,7 +708,7 @@
             }
         }
 
-        // --- GESTIÓN DEL LIGHTBOX Y ZOOM CON LUPA ---
+        // --- GESTIÓN DEL LIGHTBOX Y ZOOM ---
         function openLightboxById(id) {
             const index = photosData.findIndex(p => p.id === id);
             if (index !== -1) showLightbox(index);
@@ -779,7 +737,6 @@
             setTimeout(() => {
                 lightbox.classList.add('hidden');
                 resetLbZoom();
-                // Al salir del lightbox tras navegar, enfocar última foto visitada
                 const currentPhoto = photosData[currentLightboxIndex];
                 if (currentPhoto && currentPhoto.hasGps) {
                     focusPhoto(currentPhoto.id, true);
@@ -803,7 +760,6 @@
         lbZoomOut.addEventListener('click', () => { lbScale = Math.max(lbScale - 0.5, 0.5); updateLbTransform(); });
         lbZoomReset.addEventListener('click', resetLbZoom);
 
-        // Arrastrar imagen ampliada en Lightbox
         lightboxContainer.addEventListener('mousedown', (e) => {
             if (lbScale > 1) {
                 isDragging = true;
@@ -821,7 +777,6 @@
 
         window.addEventListener('mouseup', () => { isDragging = false; });
 
-        // Clic en imagen hace zoom toggle
         lightboxImg.addEventListener('click', (e) => {
             e.stopPropagation();
             if (lbScale === 1) {
@@ -844,6 +799,7 @@
         });
 
         searchInput.addEventListener('input', updateUI);
+        sortSelect.addEventListener('change', updateUI);
 
         // --- EXPORTAR A GEOJSON ---
         btnExportGeoJSON.addEventListener('click', () => {
@@ -889,31 +845,25 @@
             validPhotos.forEach(photo => {
                 const [xUtm, yUtm] = proj4('WGS84', utmProjStr, [photo.lon, photo.lat]);
 
-                // Extraer nombre base y separar autor (primera parte) y numeración (última parte)
                 const baseName = photo.name.replace(/\.[^/.]+$/, "");
                 const parts = baseName.split('_');
                 const authorPart = parts[0].toUpperCase();
                 const photoNum = parts.length > 1 ? parts[parts.length - 1] : baseName;
 
-                // Azimut topográfico (0° = Norte, 90° = Este)
                 const azimuth = (photo.azimuth !== null && !isNaN(photo.azimuth)) ? photo.azimuth : 0;
                 const azRad = azimuth * Math.PI / 180;
 
-                // Vector dirección azimut (Norte = +Y, Este = +X)
                 const ux = Math.sin(azRad);
                 const uy = Math.cos(azRad);
-                // Vector perpendicular (Línea diametral / Ecuador del símbolo)
                 const px = -uy;
                 const py = ux;
 
-                const R = 0.5; // Radio reducido a 0.5m (diámetro total de 1 metro)
+                const R = 0.5;
                 const layer = "0_FOTO_CAMARA";
-                const colorRed = "62\n1"; // Rojo ACI 1
+                const colorRed = "62\n1";
 
-                // 1. Círculo principal (transparente por dentro)
                 dxf.push(`0\nCIRCLE\n8\n${layer}\n${colorRed}\n10\n${xUtm.toFixed(4)}\n20\n${yUtm.toFixed(4)}\n30\n0.0\n40\n${R.toFixed(4)}`);
 
-                // 2. Línea diametral (ecuador que divide los hemisferios)
                 const ext = 1.15;
                 const p1x = xUtm + (R * ext) * px;
                 const p1y = yUtm + (R * ext) * py;
@@ -921,14 +871,12 @@
                 const p2y = yUtm - (R * ext) * py;
                 dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${p1x.toFixed(4)}\n20\n${p1y.toFixed(4)}\n30\n0.0\n11\n${p2x.toFixed(4)}\n21\n${p2y.toFixed(4)}\n31\n0.0`);
 
-                // 3. Contorno del triángulo de azimut (hueco en el interior)
                 const apexX = xUtm + (R * 2.1) * ux;
                 const apexY = yUtm + (R * 2.1) * uy;
 
                 dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${p2x.toFixed(4)}\n20\n${p2y.toFixed(4)}\n30\n0.0\n11\n${apexX.toFixed(4)}\n21\n${apexY.toFixed(4)}\n31\n0.0`);
                 dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${apexX.toFixed(4)}\n20\n${apexY.toFixed(4)}\n30\n0.0\n11\n${p1x.toFixed(4)}\n21\n${p1y.toFixed(4)}\n31\n0.0`);
 
-                // Relleno sólido exclusivo de la punta exterior
                 const wingLeftX = xUtm + 0.35 * R * px + 1.3 * R * ux;
                 const wingLeftY = yUtm + 0.35 * R * py + 1.3 * R * uy;
                 const wingRightX = xUtm - 0.35 * R * px + 1.3 * R * ux;
@@ -936,19 +884,16 @@
                 
                 dxf.push(`0\nSOLID\n8\n${layer}\n${colorRed}\n10\n${apexX.toFixed(4)}\n20\n${apexY.toFixed(4)}\n30\n0.0\n11\n${wingLeftX.toFixed(4)}\n21\n${wingLeftY.toFixed(4)}\n31\n0.0\n12\n${wingRightX.toFixed(4)}\n22\n${wingRightY.toFixed(4)}\n32\n0.0\n13\n${wingRightX.toFixed(4)}\n23\n${wingRightY.toFixed(4)}\n33\n0.0`);
 
-                // 4. Orientación de los textos paralelos a la línea diametral
                 let textRotDeg = Math.atan2(py, px) * 180 / Math.PI;
                 if (textRotDeg > 90) textRotDeg -= 180;
                 if (textRotDeg < -90) textRotDeg += 180;
 
-                const textHeight = 0.11; // Altura de texto escalada proporcionalmente para R = 0.5
+                const textHeight = 0.11;
 
-                // Texto Superior (Solo la numeración final, ej. "5")
                 const topTextX = xUtm + (0.5 * R) * ux;
                 const topTextY = yUtm + (0.5 * R) * uy;
                 dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${topTextX.toFixed(4)}\n20\n${topTextY.toFixed(4)}\n30\n0.0\n40\n${textHeight}\n1\n${photoNum}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${topTextX.toFixed(4)}\n21\n${topTextY.toFixed(4)}\n31\n0.0\n73\n2`);
 
-                // Texto Inferior (Autor, ej. "DAVID")
                 const botTextX = xUtm - (0.5 * R) * ux;
                 const botTextY = yUtm - (0.5 * R) * uy;
                 const botTextHeight = authorPart.length > 4 ? 0.085 : textHeight;
