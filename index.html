@@ -98,7 +98,7 @@
 <body class="bg-slate-100 text-slate-800 font-sans h-screen flex flex-col md:flex-row overflow-hidden">
 
     <!-- PANEL LATERAL (SIDEBAR) -->
-    <aside class="w-full md:w-96 bg-white flex flex-col h-1/2 md:h-full border-r border-slate-200 shadow-xl z-20">
+    <aside class="w-full md:w-[430px] shrink-0 bg-white flex flex-col h-1/2 md:h-full border-r border-slate-200 shadow-xl z-20">
         
         <!-- Header Principal -->
         <div class="p-4 bg-brand-900 text-white flex items-center justify-between shadow-md">
@@ -125,28 +125,28 @@
         </div>
 
         <!-- Filtros y Búsqueda -->
-        <div class="p-3 bg-white border-b border-slate-200 flex items-center gap-1.5 flex-wrap">
-            <div class="relative flex-1 min-w-[120px]">
-                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+        <div class="p-2.5 bg-white border-b border-slate-200 flex items-center gap-1">
+            <div class="relative flex-1 min-w-[85px]">
+                <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
                 <input type="text" id="search-input" placeholder="Buscar..." 
-                       class="w-full pl-8 pr-2 py-1.5 text-xs bg-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 transition">
+                       class="w-full pl-7 pr-1.5 py-1.5 text-xs bg-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 transition">
             </div>
-            <select id="sort-select" title="Ordenar fotografías" class="bg-slate-100 border border-slate-200 text-slate-700 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 transition">
+            <select id="sort-select" title="Ordenar fotografías" class="bg-slate-100 border border-slate-200 text-slate-700 text-[11px] rounded-lg px-1.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 transition shrink-0">
                 <option value="name-asc">Nombre (A-Z)</option>
                 <option value="name-desc">Nombre (Z-A)</option>
-                <option value="date-desc">Más recientes</option>
-                <option value="date-asc">Más antiguas</option>
+                <option value="date-desc">Recientes</option>
+                <option value="date-asc">Antiguas</option>
             </select>
             <button id="btn-export-geojson" title="Exportar GeoJSON" disabled
-                    class="px-2 py-1.5 bg-slate-100 hover:bg-brand-500 hover:text-white text-slate-600 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1">
+                    class="px-2 py-1.5 bg-slate-100 hover:bg-brand-500 hover:text-white text-slate-600 rounded-lg text-[11px] font-medium transition disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 shrink-0">
                 <i class="fa-solid fa-download"></i> GeoJSON
             </button>
             <button id="btn-export-dxf" title="Exportar DXF AutoCAD" disabled
-                    class="px-2 py-1.5 bg-slate-100 hover:bg-brand-600 hover:text-white text-slate-600 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1">
+                    class="px-2 py-1.5 bg-slate-100 hover:bg-brand-600 hover:text-white text-slate-600 rounded-lg text-[11px] font-medium transition disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 shrink-0">
                 <i class="fa-solid fa-file-code"></i> DXF
             </button>
             <button id="btn-reset" title="Limpiar todo" disabled
-                    class="px-2 py-1.5 bg-slate-100 hover:bg-red-500 hover:text-white text-slate-600 rounded-lg text-xs font-medium transition disabled:opacity-40 disabled:pointer-events-none">
+                    class="px-2 py-1.5 bg-slate-100 hover:bg-red-500 hover:text-white text-slate-600 rounded-lg text-[11px] font-medium transition disabled:opacity-40 disabled:pointer-events-none shrink-0">
                 <i class="fa-solid fa-trash-can"></i>
             </button>
         </div>
@@ -213,7 +213,8 @@
         let photosData = []; 
         let markersGroup = L.featureGroup(); 
         let currentLightboxIndex = 0;
-        let hiddenDates = new Set(); // <--- NUEVO: Conjunto para almacenar fechas ocultas
+        let hiddenDates = new Set();
+        let collapsedDates = new Set();
 
         let lbScale = 1;
         let lbPosX = 0;
@@ -568,7 +569,7 @@
             return marker;
         }
 
-        // --- ACTUALIZAR UI (Con control de visibilidad por fecha) ---
+        // --- ACTUALIZAR UI (Con control de visibilidad y grupos colapsables) ---
         function updateUI() {
             const query = searchInput.value.toLowerCase();
             let filteredPhotos = photosData.filter(p => p.name.toLowerCase().includes(query) || p.date.toLowerCase().includes(query));
@@ -617,8 +618,9 @@
 
             for (const [dateStr, photosOfDate] of Object.entries(groups)) {
                 const isHidden = hiddenDates.has(dateStr);
+                const isCollapsed = collapsedDates.has(dateStr);
 
-                // Gestionar visibilidad de los marcadores en el mapa para este grupo
+                // Gestionar visibilidad de los marcadores en el mapa
                 photosOfDate.forEach(photo => {
                     if (photo.marker) {
                         if (isHidden) {
@@ -633,24 +635,25 @@
                     }
                 });
 
-                // Cabecera del grupo de fecha con botón de visibilidad
+                // Cabecera del grupo: clic izquierdo pliega/despliega, botón derecho controla el mapa
                 const dateHeader = document.createElement('div');
-                dateHeader.className = `px-3 py-1.5 bg-slate-100 text-slate-600 font-bold text-[11px] uppercase tracking-wider flex items-center justify-between border-y border-slate-200 mt-2 first:mt-0 transition ${isHidden ? 'opacity-50 bg-slate-200' : ''}`;
+                dateHeader.className = `px-3 py-1.5 bg-slate-100 hover:bg-slate-200/80 text-slate-600 font-bold text-[11px] uppercase tracking-wider flex items-center justify-between border-y border-slate-200 mt-2 first:mt-0 transition select-none ${isHidden ? 'opacity-50 bg-slate-200' : ''}`;
                 dateHeader.innerHTML = `
-                    <span class="flex items-center gap-1.5">
+                    <div onclick="toggleDateCollapse('${dateStr}')" class="flex items-center gap-1.5 cursor-pointer flex-1 py-0.5" title="${isCollapsed ? 'Desplegar lista' : 'Colapsar lista'}">
+                        <i class="fa-solid ${isCollapsed ? 'fa-chevron-right' : 'fa-chevron-down'} text-[10px] text-slate-400 w-3 transition-transform"></i>
                         <i class="fa-regular fa-calendar-days text-brand-600"></i>
                         <span>${dateStr}</span>
                         <span class="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full text-[10px] ml-1">${photosOfDate.length}</span>
-                    </span>
-                    <button onclick="toggleDateVisibility('${dateStr}')" class="px-2 py-0.5 text-xs rounded hover:bg-slate-300 transition text-slate-600 flex items-center gap-1" title="${isHidden ? 'Mostrar este día' : 'Ocultar este día'}">
+                    </div>
+                    <button onclick="event.stopPropagation(); toggleDateVisibility('${dateStr}')" class="px-2 py-0.5 text-xs rounded hover:bg-slate-300 transition text-slate-600 flex items-center gap-1 shrink-0" title="${isHidden ? 'Mostrar este día en mapa y lista' : 'Ocultar este día en mapa y lista'}">
                         <i class="fa-solid ${isHidden ? 'fa-eye-slash text-red-500' : 'fa-eye text-brand-600'}"></i>
                         <span class="text-[10px] normal-case font-normal">${isHidden ? 'Oculto' : 'Visible'}</span>
                     </button>
                 `;
                 itemsContainer.appendChild(dateHeader);
 
-                // Si el grupo está oculto, no renderizamos las tarjetas individuales
-                if (isHidden) continue;
+                // Si el grupo está oculto o colapsado, no renderizamos sus tarjetas
+                if (isHidden || isCollapsed) continue;
 
                 photosOfDate.forEach(photo => {
                     const card = document.createElement('div');
@@ -687,12 +690,22 @@
             }
         }
 
-        // --- NUEVA FUNCIÓN: Alternar visibilidad de un grupo de fecha ---
+        // --- ALTERNAR VISIBILIDAD (Mapa + Lista) ---
         function toggleDateVisibility(dateStr) {
             if (hiddenDates.has(dateStr)) {
                 hiddenDates.delete(dateStr);
             } else {
                 hiddenDates.add(dateStr);
+            }
+            updateUI();
+        }
+
+        // --- COLAPSAR/DESPLEGAR GRUPO SOLO EN LA LISTA ---
+        function toggleDateCollapse(dateStr) {
+            if (collapsedDates.has(dateStr)) {
+                collapsedDates.delete(dateStr);
+            } else {
+                collapsedDates.add(dateStr);
             }
             updateUI();
         }
@@ -705,8 +718,19 @@
             let card = document.getElementById(`card-${id}`);
 
             if (isHighlight && !card) {
+                let needsUpdate = false;
+                const dateKey = photo.date || "Fecha desconocida";
+
+                if (collapsedDates.has(dateKey)) {
+                    collapsedDates.delete(dateKey);
+                    needsUpdate = true;
+                }
                 if (searchInput.value.trim() !== '') {
                     searchInput.value = '';
+                    needsUpdate = true;
+                }
+
+                if (needsUpdate) {
                     updateUI();
                     card = document.getElementById(`card-${id}`);
                 }
@@ -865,7 +889,7 @@
             URL.revokeObjectURL(url);
         });
 
-        // --- EXPORTAR A DXF (AutoCAD) ---
+        // --- EXPORTAR A DXF (AutoCAD) COMO BLOQUES UNIFICADOS ---
         btnExportDXF.addEventListener('click', () => {
             const validPhotos = photosData.filter(p => p.hasGps);
             if (validPhotos.length === 0) return;
@@ -878,10 +902,15 @@
             let dxf = [];
             dxf.push("0\nSECTION\n2\nHEADER\n0\nENDSEC");
             dxf.push("0\nSECTION\n2\nTABLES\n0\nENDSEC");
-            dxf.push("0\nSECTION\n2\nBLOCKS\n0\nENDSEC");
-            dxf.push("0\nSECTION\n2\nENTITIES");
 
-            validPhotos.forEach(photo => {
+            let blocksDxf = [];
+            blocksDxf.push("0\nSECTION\n2\nBLOCKS");
+
+            let entitiesDxf = [];
+            entitiesDxf.push("0\nSECTION\n2\nENTITIES");
+
+            validPhotos.forEach((photo, index) => {
+                const blockName = `FOTO_SYM_${index}_${Date.now()}`;
                 const [xUtm, yUtm] = proj4('WGS84', utmProjStr, [photo.lon, photo.lat]);
 
                 const baseName = photo.name.replace(/\.[^/.]+$/, "");
@@ -901,45 +930,63 @@
                 const layer = "0_FOTO_CAMARA";
                 const colorRed = "62\n1";
 
-                dxf.push(`0\nCIRCLE\n8\n${layer}\n${colorRed}\n10\n${xUtm.toFixed(4)}\n20\n${yUtm.toFixed(4)}\n30\n0.0\n40\n${R.toFixed(4)}`);
+                // --- 1. DEFINICIÓN DEL BLOQUE (Centrado en el origen 0,0 local) ---
+                blocksDxf.push("0\nBLOCK");
+                blocksDxf.push(`2\n${blockName}`);
+                blocksDxf.push("70\n0");
+                blocksDxf.push("10\n0.0\n20\n0.0\n30\n0.0"); // Punto base del bloque
 
+                // Círculo principal
+                blocksDxf.push(`0\nCIRCLE\n8\n${layer}\n${colorRed}\n10\n0.0000\n20\n0.0000\n30\n0.0\n40\n${R.toFixed(4)}`);
+
+                // Línea diametral
                 const ext = 1.15;
-                const p1x = xUtm + (R * ext) * px;
-                const p1y = yUtm + (R * ext) * py;
-                const p2x = xUtm - (R * ext) * px;
-                const p2y = yUtm - (R * ext) * py;
-                dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${p1x.toFixed(4)}\n20\n${p1y.toFixed(4)}\n30\n0.0\n11\n${p2x.toFixed(4)}\n21\n${p2y.toFixed(4)}\n31\n0.0`);
+                const p1x = (R * ext) * px;
+                const p1y = (R * ext) * py;
+                const p2x = -(R * ext) * px;
+                const p2y = -(R * ext) * py;
+                blocksDxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${p1x.toFixed(4)}\n20\n${p1y.toFixed(4)}\n30\n0.0\n11\n${p2x.toFixed(4)}\n21\n${p2y.toFixed(4)}\n31\n0.0`);
 
-                const apexX = xUtm + (R * 2.1) * ux;
-                const apexY = yUtm + (R * 2.1) * uy;
+                // Contorno del triángulo de azimut
+                const apexX = (R * 2.1) * ux;
+                const apexY = (R * 2.1) * uy;
+                blocksDxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${p2x.toFixed(4)}\n20\n${p2y.toFixed(4)}\n30\n0.0\n11\n${apexX.toFixed(4)}\n21\n${apexY.toFixed(4)}\n31\n0.0`);
+                blocksDxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${apexX.toFixed(4)}\n20\n${apexY.toFixed(4)}\n30\n0.0\n11\n${p1x.toFixed(4)}\n21\n${p1y.toFixed(4)}\n31\n0.0`);
 
-                dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${p2x.toFixed(4)}\n20\n${p2y.toFixed(4)}\n30\n0.0\n11\n${apexX.toFixed(4)}\n21\n${apexY.toFixed(4)}\n31\n0.0`);
-                dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${apexX.toFixed(4)}\n20\n${apexY.toFixed(4)}\n30\n0.0\n11\n${p1x.toFixed(4)}\n21\n${p1y.toFixed(4)}\n31\n0.0`);
+                // Relleno sólido de la punta exterior
+                const wingLeftX = 0.35 * R * px + 1.3 * R * ux;
+                const wingLeftY = 0.35 * R * py + 1.3 * R * uy;
+                const wingRightX = -0.35 * R * px + 1.3 * R * ux;
+                const wingRightY = -0.35 * R * py + 1.3 * R * uy;
+                blocksDxf.push(`0\nSOLID\n8\n${layer}\n${colorRed}\n10\n${apexX.toFixed(4)}\n20\n${apexY.toFixed(4)}\n30\n0.0\n11\n${wingLeftX.toFixed(4)}\n21\n${wingLeftY.toFixed(4)}\n31\n0.0\n12\n${wingRightX.toFixed(4)}\n22\n${wingRightY.toFixed(4)}\n32\n0.0\n13\n${wingRightX.toFixed(4)}\n23\n${wingRightY.toFixed(4)}\n33\n0.0`);
 
-                const wingLeftX = xUtm + 0.35 * R * px + 1.3 * R * ux;
-                const wingLeftY = yUtm + 0.35 * R * py + 1.3 * R * uy;
-                const wingRightX = xUtm - 0.35 * R * px + 1.3 * R * ux;
-                const wingRightY = yUtm - 0.35 * R * py + 1.3 * R * uy;
-                
-                dxf.push(`0\nSOLID\n8\n${layer}\n${colorRed}\n10\n${apexX.toFixed(4)}\n20\n${apexY.toFixed(4)}\n30\n0.0\n11\n${wingLeftX.toFixed(4)}\n21\n${wingLeftY.toFixed(4)}\n31\n0.0\n12\n${wingRightX.toFixed(4)}\n22\n${wingRightY.toFixed(4)}\n32\n0.0\n13\n${wingRightX.toFixed(4)}\n23\n${wingRightY.toFixed(4)}\n33\n0.0`);
-
+                // Textos orientados
                 let textRotDeg = Math.atan2(py, px) * 180 / Math.PI;
                 if (textRotDeg > 90) textRotDeg -= 180;
                 if (textRotDeg < -90) textRotDeg += 180;
-
                 const textHeight = 0.11;
 
-                const topTextX = xUtm + (0.5 * R) * ux;
-                const topTextY = yUtm + (0.5 * R) * uy;
-                dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${topTextX.toFixed(4)}\n20\n${topTextY.toFixed(4)}\n30\n0.0\n40\n${textHeight}\n1\n${photoNum}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${topTextX.toFixed(4)}\n21\n${topTextY.toFixed(4)}\n31\n0.0\n73\n2`);
+                const topTextX = (0.5 * R) * ux;
+                const topTextY = (0.5 * R) * uy;
+                blocksDxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${topTextX.toFixed(4)}\n20\n${topTextY.toFixed(4)}\n30\n0.0\n40\n${textHeight}\n1\n${photoNum}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${topTextX.toFixed(4)}\n21\n${topTextY.toFixed(4)}\n31\n0.0\n73\n2`);
 
-                const botTextX = xUtm - (0.5 * R) * ux;
-                const botTextY = yUtm - (0.5 * R) * uy;
+                const botTextX = -(0.5 * R) * ux;
+                const botTextY = -(0.5 * R) * uy;
                 const botTextHeight = authorPart.length > 4 ? 0.085 : textHeight;
-                dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${botTextX.toFixed(4)}\n20\n${botTextY.toFixed(4)}\n30\n0.0\n40\n${botTextHeight}\n1\n${authorPart}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${botTextX.toFixed(4)}\n21\n${botTextY.toFixed(4)}\n31\n0.0\n73\n2`);
+                blocksDxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${botTextX.toFixed(4)}\n20\n${botTextY.toFixed(4)}\n30\n0.0\n40\n${botTextHeight}\n1\n${authorPart}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${botTextX.toFixed(4)}\n21\n${botTextY.toFixed(4)}\n31\n0.0\n73\n2`);
+
+                blocksDxf.push("0\nENDBLK");
+
+                // --- 2. INSERCIÓN DEL BLOQUE EN COORDENADAS UTM ---
+                entitiesDxf.push(`0\nINSERT\n8\n${layer}\n2\n${blockName}\n10\n${xUtm.toFixed(4)}\n20\n${yUtm.toFixed(4)}\n30\n0.0`);
             });
 
-            dxf.push("0\nENDSEC\n0\nEOF");
+            blocksDxf.push("0\nENDSEC");
+            entitiesDxf.push("0\nENDSEC");
+
+            dxf.push(blocksDxf.join("\n"));
+            dxf.push(entitiesDxf.join("\n"));
+            dxf.push("0\nEOF");
 
             const blob = new Blob([dxf.join("\n")], { type: "application/dxf" });
             const url = URL.createObjectURL(blob);
@@ -955,6 +1002,8 @@
             if (!confirm("¿Deseas borrar todas las fotos cargadas?")) return;
             photosData.forEach(p => URL.revokeObjectURL(p.url));
             photosData = [];
+            hiddenDates.clear();
+            collapsedDates.clear();
             markersGroup.clearLayers();
             updateUI();
             statusText.innerText = 'Lista limpiada';
