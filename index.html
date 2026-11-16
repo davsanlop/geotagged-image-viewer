@@ -727,32 +727,42 @@
                 const layer = "0_FOTO_CAMARA";
                 const colorRed = "62\n1"; // ACI 1 = Rojo
 
-                // 1. Círculo principal
-                dxf.push(`0\nCIRCLE\n8\n${layer}\n${colorRed}\n10\n${xUtm.toFixed(3)}\n20\n${yUtm.toFixed(3)}\n30\n0.0\n40\n${R.toFixed(3)}`);
-
-                // 2. Línea divisoria diametral perpendicular al azimut
-                const xL1 = xUtm + R * px;
-                const yL1 = yUtm + R * py;
-                const xL2 = xUtm - R * px;
-                const yL2 = yUtm - R * py;
+                // 1. Línea divisoria diametral (Middle line)
+                const xL1 = xUtm - R * px;
+                const yL1 = yUtm - R * py;
+                const xL2 = xUtm + R * px;
+                const yL2 = yUtm + R * py;
                 dxf.push(`0\nLINE\n8\n${layer}\n${colorRed}\n10\n${xL1.toFixed(3)}\n20\n${yL1.toFixed(3)}\n30\n0.0\n11\n${xL2.toFixed(3)}\n21\n${yL2.toFixed(3)}\n31\n0.0`);
 
-                // 3. Punta de flecha sólida (SOLID) ajustada a la referencia visual
-                const apexX = xUtm + (R + 0.65 * R) * ux;
-                const apexY = yUtm + (R + 0.65 * R) * uy;
+                // 2. Semicírculo inferior (ARC)
+                const angle1 = Math.atan2(yL1 - yUtm, xL1 - xUtm) * 180 / Math.PI;
+                const angle2 = Math.atan2(yL2 - yUtm, xL2 - xUtm) * 180 / Math.PI;
+                const angleBack = Math.atan2(-uy, -ux) * 180 / Math.PI;
                 
-                const leftWingX = xUtm + 0.1 * R * ux + 1.15 * R * px;
-                const leftWingY = yUtm + 0.1 * R * uy + 1.15 * R * py;
-                const rightWingX = xUtm + 0.1 * R * ux - 1.15 * R * px;
-                const rightWingY = yUtm + 0.1 * R * uy - 1.15 * R * py;
+                function normalizeAngle(a) { return (a + 360) % 360; }
+                let s = normalizeAngle(angle1);
+                let e = normalizeAngle(angle2);
+                let b = normalizeAngle(angleBack);
+                
+                let aStart = angle1;
+                let aEnd = angle2;
+                let inCcw = (s <= e) ? (b >= s && b <= e) : (b >= s || b <= e);
+                if (!inCcw) {
+                    let temp = aStart; aStart = aEnd; aEnd = temp;
+                }
+                dxf.push(`0\nARC\n8\n${layer}\n${colorRed}\n10\n${xUtm.toFixed(3)}\n20\n${yUtm.toFixed(3)}\n30\n0.0\n40\n${R.toFixed(3)}\n50\n${aStart.toFixed(2)}\n51\n${aEnd.toFixed(2)}`);
 
-                dxf.push(`0\nSOLID\n8\n${layer}\n${colorRed}\n10\n${apexX.toFixed(3)}\n20\n${apexY.toFixed(3)}\n30\n0.0\n11\n${leftWingX.toFixed(3)}\n21\n${leftWingY.toFixed(3)}\n31\n0.0\n12\n${rightWingX.toFixed(3)}\n22\n${rightWingY.toFixed(3)}\n32\n0.0\n13\n${rightWingX.toFixed(3)}\n23\n${rightWingY.toFixed(3)}\n33\n0.0`);
+                // 3. Triángulo de azimut sólido (SOLID) con base exactamente en la línea diametral
+                const apexX = xUtm + (R * 1.2) * ux;
+                const apexY = yUtm + (R * 1.2) * uy;
 
-                // 4. Textos interiores (tamaño reducido para encajar perfectamente)
+                dxf.push(`0\nSOLID\n8\n${layer}\n${colorRed}\n10\n${apexX.toFixed(3)}\n20\n${apexY.toFixed(3)}\n30\n0.0\n11\n${xL1.toFixed(3)}\n21\n${yL1.toFixed(3)}\n31\n0.0\n12\n${xL2.toFixed(3)}\n22\n${yL2.toFixed(3)}\n32\n0.0\n13\n${xL2.toFixed(3)}\n23\n${yL2.toFixed(3)}\n33\n0.0`);
+
+                // 4. Textos interiores
                 const textRotDeg = ((theta - Math.PI / 2) * 180) / Math.PI;
-                const textHeight = 0.25 * R; // Tamaño reducido
+                const textHeight = 0.25 * R;
 
-                // Mitad superior: Número de foto (a partir de la barra baja)
+                // Mitad superior: Número de foto
                 const topTextX = xUtm + (0.45 * R) * ux;
                 const topTextY = yUtm + (0.45 * R) * uy;
                 dxf.push(`0\nTEXT\n8\n${layer}\n${colorRed}\n10\n${topTextX.toFixed(3)}\n20\n${topTextY.toFixed(3)}\n30\n0.0\n40\n${textHeight.toFixed(3)}\n1\n${photoNum}\n50\n${textRotDeg.toFixed(2)}\n72\n1\n11\n${topTextX.toFixed(3)}\n21\n${topTextY.toFixed(3)}\n31\n0.0\n73\n2`);
