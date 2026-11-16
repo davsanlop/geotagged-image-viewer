@@ -121,7 +121,7 @@
         <!-- Zona Drag & Drop -->
         <div class="p-3 bg-slate-50 border-b border-slate-200">
             <div id="drop-zone" class="border-2 border-dashed border-brand-500 hover:border-brand-600 bg-brand-50/50 hover:bg-brand-50 transition-all rounded-xl p-4 text-center cursor-pointer group">
-                <input type="file" id="file-input" multiple accept="image/jpeg, image/jpg" class="hidden">
+                <input type="file" id="file-input" multiple accept="image/jpeg, image/jpg" webkitdirectory directory class="hidden">
                 <i class="fa-solid fa-cloud-arrow-up text-3xl text-brand-500 group-hover:scale-110 transition-transform mb-1"></i>
                 <p class="text-xs font-semibold text-slate-700">Arrastra fotos JPG/JPEG aquí</p>
                 <p class="text-[10px] text-slate-500 mt-0.5">o haz clic para explorar en tu equipo</p>
@@ -284,15 +284,80 @@
         const lbZoomReset = document.getElementById('lb-zoom-reset');
         const lbZoomLevel = document.getElementById('lb-zoom-level');
 
-        // --- GESTIÓN DE EVENTOS DE DRAG & DROP ---
+        // --- FUNCIÓN RECURSIVA PARA LEER CARPETAS Y ARCHIVOS ARRastrados ---
+        async function getFilesFromDataTransferItems(items) {
+            let files = [];
+            let entries = [];
+
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (item.webkitGetAsEntry) {
+                    const entry = item.webkitGetAsEntry();
+                    if (entry) entries.push(entry);
+                } else if (item.getAsFile) {
+                    const file = item.getAsFile();
+                    if (file) files.push(file);
+                }
+            }
+
+            async function traverseEntry(entry) {
+                if (entry.isFile) {
+                    return new Promise((resolve) => {
+                        entry.file((file) => {
+                            files.push(file);
+                            resolve();
+                        }, () => resolve());
+                    });
+                } else if (entry.isDirectory) {
+                    const reader = entry.createReader();
+                    return new Promise((resolve) => {
+                        const readEntries = () => {
+                            reader.readEntries(async (results) => {
+                                if (results.length === 0) {
+                                    resolve();
+                                } else {
+                                    for (let subEntry of results) {
+                                        await traverseEntry(subEntry);
+                                    }
+                                    readEntries(); // Continuar leyendo si hay más lotes
+                                }
+                            }, () => resolve());
+                        };
+                        readEntries();
+                    });
+                }
+            }
+
+            for (let entry of entries) {
+                await traverseEntry(entry);
+            }
+
+            return files;
+        }
+
+        // --- GESTIÓN DE EVENTOS DE DRAG & DROP ACTUALIZADA ---
         dropZone.addEventListener('click', () => fileInput.click());
         dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('bg-brand-100'); });
         dropZone.addEventListener('dragleave', () => dropZone.classList.remove('bg-brand-100'));
-        dropZone.addEventListener('drop', (e) => {
+        
+        dropZone.addEventListener('drop', async (e) => {
             e.preventDefault();
             dropZone.classList.remove('bg-brand-100');
-            if (e.dataTransfer.files.length) processFiles(e.dataTransfer.files);
+
+            const items = e.dataTransfer.items;
+            if (items && items.length > 0) {
+                statusText.innerText = 'Escaneando carpetas y archivos...';
+                const extractedFiles = await getFilesFromDataTransferItems(items);
+                if (extractedFiles.length > 0) {
+                    processFiles(extractedFiles);
+                } else {
+                    statusText.innerText = 'No se encontraron archivos compatibles';
+                }
+            } else if (e.dataTransfer.files.length) {
+                processFiles(e.dataTransfer.files);
+            }
         });
+
         fileInput.addEventListener('change', (e) => {
             if (e.target.files.length) processFiles(e.target.files);
         });
